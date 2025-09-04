@@ -6,7 +6,16 @@ const scheduleSchema = new mongoose.Schema({
     {
       itemId: String,
       line: String,
-      quantity: Number
+      quantity: Number,
+      plannedMinutes: Number
+    }
+  ],
+  lineUtilization: [
+    {
+      line: String,
+      plannedMinutes: Number,
+      remainingMinutes: Number,
+      efficiency: Number
     }
   ],
   totalPlanned: Number,
