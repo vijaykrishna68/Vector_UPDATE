@@ -300,5 +300,51 @@ app.get('/schedule', async (req, res) => {
   }
 });
 
+// GET allocation summaries for frontend
+app.get('/allocation/weeks', async (req, res) => {
+  try {
+    const weekColumns = await Part.distinct('weekColumn');
+    const results = [];
+    for (const w of weekColumns) {
+      const parts = await Part.find({ weekColumn: w });
+      const SUM = parts.reduce((s, p) => s + (Number(p.weeklyQty) || 0), 0);
+      const CountOfParts = parts.filter(p => (Number(p.weeklyQty) || 0) > 0).length;
+
+      // derive actualWorkingDays from LineDay entries
+      const lineDays = await LineDay.find({ weekColumn: w });
+      const maxDay = lineDays.reduce((m, d) => Math.max(m, Number(d.dayIndex || -1)), -1);
+      const actualWorkingDays = maxDay >= 0 ? maxDay + 1 : 0;
+
+      const lineTotals = { 1: { allocated: 0, remaining: 0 }, 2: { allocated: 0, remaining: 0 }, 3: { allocated: 0, remaining: 0 }, 4: { allocated: 0, remaining: 0 } };
+      parts.forEach(p => {
+        const allocated = (p.allocations || []).reduce((s, a) => s + (Number(a.qty) || 0), 0);
+        const ol = (p.originalLine === null || p.originalLine === undefined) ? 1 : Number(p.originalLine);
+        if (!lineTotals[ol]) lineTotals[ol] = { allocated: 0, remaining: 0 };
+        lineTotals[ol].allocated += allocated;
+        lineTotals[ol].remaining += (Number(p.remainingQty) || 0);
+      });
+
+      results.push({ weekColumn: w, SUM, CountOfParts, actualWorkingDays, lineTotals });
+    }
+    res.json({ weeks: results });
+  } catch (err) {
+    console.error('❌ Error fetching allocation weeks:', err);
+    res.status(500).json({ error: 'Error fetching allocation weeks' });
+  }
+});
+
+// GET detailed allocation for a single week
+app.get('/allocation/week/:weekColumn', async (req, res) => {
+  try {
+    const { weekColumn } = req.params;
+    const parts = await Part.find({ weekColumn }).lean();
+    const lineDays = await LineDay.find({ weekColumn }).sort({ dayIndex: 1 }).lean();
+    res.json({ weekColumn, parts, lineDays });
+  } catch (err) {
+    console.error('❌ Error fetching allocation week detail:', err);
+    res.status(500).json({ error: 'Error fetching allocation week detail' });
+  }
+});
+
 const PORT = 4000
 app.listen(PORT, ()=>console.log(`server running at port ${PORT}`))

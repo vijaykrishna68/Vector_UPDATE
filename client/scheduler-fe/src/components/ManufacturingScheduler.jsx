@@ -1,11 +1,24 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "./Header";
 import Dashboard from "./Dashboard";
 import FileUpload from "./FileUpload";
+import WeekSummaryList from "./WeekSummaryList";
+import WeekDetail from "./WeekDetail";
+import { fetchWeeks } from '../api';
 
 const ManufacturingScheduler = () => {
   const [selectedLine, setSelectedLine] = useState(null);
   const [currentView, setCurrentView] = useState("dashboard");
+  const [weeks, setWeeks] = useState([]);
+  const [selectedWeek, setSelectedWeek] = useState(null);
+
+  useEffect(() => {
+    if (currentView === 'schedule') {
+      fetchWeeks().then(r => {
+        setWeeks(r.weeks || []);
+      }).catch(() => setWeeks([]));
+    }
+  }, [currentView]);
 
   // 🔹 Mock production data
   const productionLines = [
@@ -157,6 +170,16 @@ const ManufacturingScheduler = () => {
           />
         )}
         {currentView === "upload" && <FileUpload />}
+        {currentView === "schedule" && (
+          <div className="space-y-6">
+            <WeekSummaryList weeks={weeks} onSelectWeek={(w) => setSelectedWeek(w)} />
+            {selectedWeek && (
+              <div className="mt-6">
+                <WeekDetail weekColumn={selectedWeek} />
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
