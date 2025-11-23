@@ -1,0 +1,29 @@
+### Sheet 1:
+Note: words enclosed in " " are to be considered as variables given to identify a value. 
+Note: columns BU , BV and BW in sheet 1  are the weekly schedule columns each representing one week of production of a particular month.
+
+### sheet 1:
+
+1. Filter column J to have only PC .
+2. "SUM" = sum of all cells in the respective week column among (BU , BV , BW)
+3. "Count of parts" = count of all cells in the respective week column among (BU , BV , BW)
+
+### Sheet 3:
+
+1. value of Cells of Col I and row of a particular week , is to be "actual working days" ,  given by "SUM" / 3000.
+
+### Allocation
+
+1. Filter out the line number (1/2/3/4) in column D in sheet one, and make sure all the values (week sch column BU/ BV/BW)  have everything but zero using filter , every time the line is changed. 
+2. Choose the lines in this order: 3> 2> 4> 1. because the parts marked for production in line 3 can only be done in line 3, but the parts marked for line 2, can also be produced in line 4. so if the capacity of line 2 is already filled, the remaining can be allocated to line 4. then we start allocating for parts originally marked for line 4. if this capacity is now filled, we can allocate the remaining parts to line 1 as line can be used to produce the parts of line 4 and line one usually has the smallest amount of parts so it can have some over from the line 4 . 
+3. Calculating per day quantity "pqty" : "pqty" of a line is given by : number of parts for that line / "actual working days". 
+4. Allocate "pqty" number of parts everyday from the date starting from column CU  till the "actual working days" calculated and the "Count of parts" is satisfied for the chosen week. (it's fine if the total count value of allocated parts is not matching the count of parts of that week exactly, an error of 20 plus or minus is fine. ) 
+5. while allocating , make sure the actual minutes (sum of each part quantity * Cycle time of that part (column H)) exceed the total working minutes of a line (man power *475) 
+    
+    Man power of each line :
+    
+    1. Line 1 - 3
+    2. Line 2 - 4
+    3. Line 3 - 2
+    4. Line 4 - 3
+6. Place the value of the quantity each day against the row(part ) and column (date) carefully from the column CU.

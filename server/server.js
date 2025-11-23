@@ -9,6 +9,8 @@ var XLSX = require("xlsx");
 const Item = require('./models/Item.js');
 const Line = require('./models/Line.js');
 const Schedule = require('./models/Schedule.js');
+const Part = require('./models/Part.js');
+const LineDay = require('./models/LineDay.js');
 const AllocationEngine = require('./allocation.js');
 
 mongoose.connect('mongodb://127.0.0.1:27017/hoseSchedulerDB')
@@ -25,7 +27,7 @@ app.get('/',(req,res)=>{
 })
 
 
-const path = require('path');
+
 const storage = multer.diskStorage({
   destination: path.join(__dirname, '../uploads'),
 });
@@ -34,110 +36,123 @@ const upload = multer({ storage });
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
     const workbook = XLSX.readFile(req.file.path);
-    const sheetNames = workbook.SheetNames;
-    
-    const sheet2 = XLSX.utils.sheet_to_json(workbook.Sheets['SHEET 2']);
-    const sheet4 = XLSX.utils.sheet_to_json(workbook.Sheets['SHEET 4']);
-
-    function excelDateToJS(serial) {
-      const base = new Date(1900, 0, serial - 1);
-      return base.toISOString().split('T')[0];
-    }
-
-    // Parse items from SHEET 2
-    const items = sheet2.map(row => ({
-      itemId: row['__EMPTY'],
-      lineHint: row['__EMPTY_1'],
-      componentUnit: row['__EMPTY_2'],
-      customer: row['__EMPTY_3'],
-      cycleTime: row['__EMPTY_4'],
-      feasibility: row['__EMPTY_6'] || row['WEEKLY FESABLE GIVEN'],
-      feasibilityPending: row['WEEKLY FESABLE PENDING'],
-      specType: row['__EMPTY_5'] || 'Hybrid', // Default to Hybrid if not specified
-      dashSize: row['__EMPTY_7'] || null,
-      lineAssignments: [],
-      dailyAllocations: new Array(10).fill(0)
-    }));
-
-    // Parse lines from SHEET 4
-    const lines = sheet4.map(row => ({
-      lineName: `Line ${row['Line ']}`,
-      manpower: row['Manpower'],
-      availableMinutes: row['Working Minutes Total'],
-      efficiency: row['Efficiency'],
-      targetEfficiency: row['Target Efficiency'],
-      date: typeof row['Date'] === 'number' ? excelDateToJS(row['Date']) : null
-    }));
-
-    // Generate day keys for BI-BR columns (10 days)
-    const today = new Date();
-    const dayKeys = [];
-    for (let i = 0; i < 10; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dayKeys.push(date.toISOString().split('T')[0]);
-    }
-
-    console.log("Mapped Items:", items.slice(0, 3));
-    console.log("Mapped Lines:", lines.slice(0, 3));
-    console.log("Day Keys:", dayKeys);
-
-    // Initialize allocation engine
     const allocationEngine = new AllocationEngine();
-    
-    // Perform allocation
-    const allocationResult = allocationEngine.allocateItems(items, lines, dayKeys);
-    
-    // Generate output filename and path
+    const runResult = allocationEngine.run(workbook);
+
+    // Write updated workbook with allocations & actualWorkingDays
     const outputFileName = allocationEngine.generateOutputFilename();
     const outputPath = path.join(__dirname, '../output', outputFileName);
-    
-    // Ensure output directory exists
     const outputDir = path.join(__dirname, '../output');
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-    
-    // Write allocations back to Excel
-    allocationEngine.writeAllocationsToExcel(req.file.path, items, dayKeys, outputPath);
-    
-    // Save to MongoDB
-    await saveToDatabase(items, lines, dayKeys, allocationResult);
-    
-    // Prepare response
-    const itemsPreview = items.slice(0, 5).map(item => ({
-      itemId: item.itemId,
-      customer: item.customer,
-      feasibility: item.feasibility,
-      dailyAllocations: item.dailyAllocations
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    XLSX.writeFile(workbook, outputPath);
+
+    // Build response
+    const responseWeeks = runResult.weeksResults.map(w => ({
+      weekColumn: w.weekColumn,
+      SUM: w.SUM,
+      CountOfParts: w.CountOfParts,
+      actualWorkingDays: w.actualWorkingDays,
+      lineTotals: w.lineTotals,
+      parts: w.parts.slice(0, 25) // preview limit
     }));
-    
-    const lineUtilization = {};
-    dayKeys.forEach(day => {
-      if (allocationResult.lineUtilization[day]) {
-        lineUtilization[day] = Object.keys(allocationResult.lineUtilization[day]).map(lineName => ({
-          line: lineName,
-          plannedMinutes: allocationResult.lineUtilization[day][lineName].plannedMinutes,
-          remainingMinutes: allocationResult.lineUtilization[day][lineName].remainingMinutes,
-          efficiency: allocationResult.lineUtilization[day][lineName].efficiency
-        }));
-      }
-    });
+
+    // Persist to Mongo (parts + line/day minutes)
+    await saveNewAllocationToMongo(runResult);
 
     res.json({
-      message: "File processed and allocated successfully",
-      itemsPreview,
-      lineUtilization,
+      message: 'File processed with new week-based allocation',
+      sheet1: runResult.sheet1Name,
+      sheet3: runResult.sheet3Name,
+      weeks: responseWeeks,
       outputFileName,
-      workingDays: allocationResult.workingDays,
-      totalFeasibility: allocationResult.totalFeasibility
+      outputPath
     });
-
   } catch (err) {
-    console.error("❌ Error processing file:", err);
-    res.status(500).json({ error: "Error processing Excel file" });
+    console.error('❌ Error processing file (new allocator):', err);
+    res.status(500).json({ error: 'Error processing Excel file', details: err.message });
   }
 });
+
+async function saveNewAllocationToMongo(runResult) {
+  try {
+    for (const w of runResult.weeksResults) {
+      const headers = w.dateHeaders || [];
+      // Upsert parts
+      for (const p of w.parts) {
+        try {
+          // sanitize numeric fields to avoid NaN being written to Number schema fields
+          const safeOriginalLine = (p.originalLine === null || p.originalLine === undefined || isNaN(Number(p.originalLine))) ? null : Number(p.originalLine);
+          const safeCycleTime = (p.cycleTime === null || p.cycleTime === undefined || isNaN(Number(p.cycleTime))) ? 1 : Number(p.cycleTime);
+          const safeWeeklyQty = (p.weeklyQty === null || p.weeklyQty === undefined || isNaN(Number(p.weeklyQty))) ? 0 : Number(p.weeklyQty);
+          const safeRemaining = (p.remainingQty === null || p.remainingQty === undefined || isNaN(Number(p.remainingQty))) ? 0 : Number(p.remainingQty);
+
+          const doc = {
+            spec: p.spec,
+            weekColumn: w.weekColumn,
+            rowIndex: (p.rowIndex === null || p.rowIndex === undefined || isNaN(Number(p.rowIndex))) ? -1 : Number(p.rowIndex),
+            originalLine: safeOriginalLine,
+            cycleTime: safeCycleTime,
+            weeklyQty: safeWeeklyQty,
+            remainingQty: safeRemaining,
+            allocations: (p.allocations || []).map(a => ({
+              dayIndex: a.dayIndex,
+              dateHeader: headers[a.dayIndex] != null ? String(headers[a.dayIndex]) : String(a.dayIndex),
+              line: (a.lineUsed === null || a.lineUsed === undefined || isNaN(Number(a.lineUsed))) ? null : Number(a.lineUsed),
+              qty: (a.qty === null || a.qty === undefined || isNaN(Number(a.qty))) ? 0 : Number(a.qty),
+              minutes: ((a.qty || 0) * safeCycleTime)
+            }))
+          };
+          await Part.findOneAndUpdate(
+            { spec: doc.spec, weekColumn: doc.weekColumn, rowIndex: doc.rowIndex },
+            doc,
+            { upsert: true, new: true }
+          );
+        } catch (e) {
+          console.error('❌ Part upsert failed:', {
+            weekColumn: w.weekColumn,
+            spec: p.spec,
+            rowIndex: p.rowIndex,
+            error: e?.message
+          });
+        }
+      }
+      // Upsert line/day minutes
+      for (const day of (w.lineDayMinutes || [])) {
+        const di = day.dayIndex;
+        for (const lineKey of Object.keys(day.lines)) {
+          try {
+            const lineNum = Number(lineKey);
+            const minutes = day.lines[lineKey];
+            await LineDay.findOneAndUpdate(
+              { weekColumn: w.weekColumn, dayIndex: di, line: lineNum },
+              {
+                weekColumn: w.weekColumn,
+                dayIndex: di,
+                dateHeader: headers[di] != null ? String(headers[di]) : String(di),
+                line: lineNum,
+                capacityMinutes: (minutes.used || 0) + (minutes.remaining || 0),
+                usedMinutes: minutes.used || 0,
+                remainingMinutes: minutes.remaining || 0
+              },
+              { upsert: true, new: true }
+            );
+          } catch (e) {
+            console.error('❌ LineDay upsert failed:', {
+              weekColumn: w.weekColumn,
+              dayIndex: di,
+              line: lineKey,
+              error: e?.message
+            });
+          }
+        }
+      }
+    }
+    console.log('✅ New allocation data saved to MongoDB');
+  } catch (err) {
+    console.error('❌ Error saving new allocation to MongoDB:', err);
+    // Do not throw: persistence failure shouldn’t block the upload flow
+  }
+}
 
 // Helper function to save data to MongoDB
 async function saveToDatabase(items, lines, dayKeys, allocationResult) {
@@ -285,5 +300,5 @@ app.get('/schedule', async (req, res) => {
   }
 });
 
-const PORT = 5000
+const PORT = 4000
 app.listen(PORT, ()=>console.log(`server running at port ${PORT}`))
