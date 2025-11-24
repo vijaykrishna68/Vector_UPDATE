@@ -310,7 +310,6 @@ app.get('/allocation/weeks', async (req, res) => {
       const SUM = parts.reduce((s, p) => s + (Number(p.weeklyQty) || 0), 0);
       const CountOfParts = parts.filter(p => (Number(p.weeklyQty) || 0) > 0).length;
 
-      // derive actualWorkingDays from LineDay entries
       const lineDays = await LineDay.find({ weekColumn: w });
       const maxDay = lineDays.reduce((m, d) => Math.max(m, Number(d.dayIndex || -1)), -1);
       const actualWorkingDays = maxDay >= 0 ? maxDay + 1 : 0;
@@ -318,13 +317,40 @@ app.get('/allocation/weeks', async (req, res) => {
       const lineTotals = { 1: { allocated: 0, remaining: 0 }, 2: { allocated: 0, remaining: 0 }, 3: { allocated: 0, remaining: 0 }, 4: { allocated: 0, remaining: 0 } };
       parts.forEach(p => {
         const allocated = (p.allocations || []).reduce((s, a) => s + (Number(a.qty) || 0), 0);
-        const ol = (p.originalLine === null || p.originalLine === undefined) ? 1 : Number(p.originalLine);
+        const ol = (p.originalLine === null || p.originalLine === undefined || isNaN(Number(p.originalLine))) ? 1 : Number(p.originalLine);
         if (!lineTotals[ol]) lineTotals[ol] = { allocated: 0, remaining: 0 };
         lineTotals[ol].allocated += allocated;
         lineTotals[ol].remaining += (Number(p.remainingQty) || 0);
       });
 
-      results.push({ weekColumn: w, SUM, CountOfParts, actualWorkingDays, lineTotals });
+      const perLineMinutes = { 1: { used: 0, capacity: 0 }, 2: { used: 0, capacity: 0 }, 3: { used: 0, capacity: 0 }, 4: { used: 0, capacity: 0 } };
+      lineDays.forEach(ld => {
+        const ln = Number(ld.line);
+        if (!perLineMinutes[ln]) perLineMinutes[ln] = { used: 0, capacity: 0 };
+        perLineMinutes[ln].used += Number(ld.usedMinutes) || 0;
+        perLineMinutes[ln].capacity += Number(ld.capacityMinutes) || 0;
+      });
+
+      const lines = [1,2,3,4].map(ln => {
+        const allocParts = lineTotals[ln]?.allocated || 0;
+        const remainingParts = lineTotals[ln]?.remaining || 0;
+        const usedMin = perLineMinutes[ln]?.used || 0;
+        const capMin = perLineMinutes[ln]?.capacity || 0;
+        const efficiency = capMin > 0 ? +( (usedMin / capMin) * 100 ).toFixed(2) : 0;
+        const avgPartsPerDay = (actualWorkingDays > 0) ? +(allocParts / actualWorkingDays).toFixed(2) : 0;
+        return {
+          line: ln,
+          allocatedParts: allocParts,
+          remainingParts,
+          capacityMinutes: capMin,
+          usedMinutes: usedMin,
+          efficiency,
+          workingDays: actualWorkingDays,
+          avgPartsPerDay
+        };
+      });
+
+      results.push({ weekColumn: w, SUM, CountOfParts, actualWorkingDays, lineTotals, lines });
     }
     res.json({ weeks: results });
   } catch (err) {
