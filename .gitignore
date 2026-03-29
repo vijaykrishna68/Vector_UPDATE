@@ -1,3 +1,33 @@
-output/~$Allocated_20250905_103416.xlsx
-output/Allocated_20250905_051645.xlsx
-output/Allocated_20250905_103416.xlsx
+# Dependencies
+**/node_modules/
+
+# Build output
+**/dist/
+**/dist-ssr/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Runtime/generated artifacts
+output/
+uploads/
+
+# Logs
+**/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,318 +1,115 @@
 const express = require('express');
-const mongoose = require('mongoose');  
 const multer  = require('multer') 
 const cors = require('cors');
-const fs = require('fs');
 const path = require('path');
 var XLSX = require("xlsx");
 
-const Item = require('./models/Item.js');
-const Line = require('./models/Line.js');
-const Schedule = require('./models/Schedule.js');
-const Part = require('./models/Part.js');
-const LineDay = require('./models/LineDay.js');
-const AllocationEngine = require('./allocation.js');
+// Local dev convenience. In production (Render/Fly/etc), env vars are injected by the platform.
+try {
+  require('dotenv').config();
+} catch (_) {
+  // dotenv is optional; ignore if not installed.
+}
 
-mongoose.connect('mongodb://127.0.0.1:27017/hoseSchedulerDB')
-.then(() => console.log("✅ MongoDB connected"))
-.catch(err => console.error("❌ Connection error:", err));
+const AllocationEngine = require('./allocation.js');
 
 
 const app = express();
-app.use(cors());
+// Needed so req.protocol reflects https behind Render/Fly reverse proxies.
+app.set('trust proxy', true);
+
+// In-memory cache of the most recently processed upload.
+// NOTE: This is NOT persisted and will reset on deploy/restart.
+let lastRun = null;
+
+function parseCsvList(value) {
+  return String(value || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+const allowedOrigins = parseCsvList(process.env.CORS_ORIGINS || process.env.CORS_ORIGIN);
+if (allowedOrigins.length > 0) {
+  app.use(cors({
+    exposedHeaders: ['Content-Disposition', 'X-Output-Filename'],
+    origin: (origin, cb) => {
+      // Allow non-browser clients or same-origin requests with no Origin header.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  }));
+} else {
+  // Default to permissive CORS for local dev.
+  app.use(cors({ exposedHeaders: ['Content-Disposition', 'X-Output-Filename'] }));
+}
 app.use(express.json());
 
-app.get('/',(req,res)=>{
-  res.send('server running')  
-})
+function safeAttachmentFilename(name) {
+  const raw = String(name || 'output.xlsx');
+  // Avoid path traversal and control chars.
+  const cleaned = raw.replace(/[\r\n\\/]/g, '_').replace(/\.+/g, (m) => (m === '..' ? '_' : m));
+  return cleaned || 'output.xlsx';
+}
 
-
-
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, '../uploads'),
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: Number(process.env.MAX_UPLOAD_BYTES || 25 * 1024 * 1024) // default 25MB
+  }
 });
-const upload = multer({ storage });
 
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
-    const workbook = XLSX.readFile(req.file.path);
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'Missing uploaded file (field name: file)' });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const allocationEngine = new AllocationEngine();
     const runResult = allocationEngine.run(workbook);
 
-    // Write updated workbook with allocations & actualWorkingDays
-    const outputFileName = allocationEngine.generateOutputFilename();
-    const outputPath = path.join(__dirname, '../output', outputFileName);
-    const outputDir = path.join(__dirname, '../output');
-    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    XLSX.writeFile(workbook, outputPath);
-
-    // Build response
-    const responseWeeks = runResult.weeksResults.map(w => ({
-      weekColumn: w.weekColumn,
-      SUM: w.SUM,
-      CountOfParts: w.CountOfParts,
-      actualWorkingDays: w.actualWorkingDays,
-      lineTotals: w.lineTotals,
-      parts: w.parts.slice(0, 25) // preview limit
-    }));
-
-    // Persist to Mongo (parts + line/day minutes)
-    await saveNewAllocationToMongo(runResult);
-
-    res.json({
-      message: 'File processed with new week-based allocation',
+    // Store last run in memory for the schedule views (no persistence).
+    lastRun = {
+      createdAt: new Date().toISOString(),
       sheet1: runResult.sheet1Name,
       sheet3: runResult.sheet3Name,
-      weeks: responseWeeks,
-      outputFileName,
-      outputPath
-    });
+      weeksResults: runResult.weeksResults
+    };
+
+    // Write updated workbook with allocations & actualWorkingDays
+    const outputFileName = allocationEngine.generateOutputFilename();
+    const outputBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // Return the processed XLSX directly (downloadable response).
+    const downloadName = safeAttachmentFilename(outputFileName);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    res.setHeader('X-Output-Filename', downloadName);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(outputBuffer);
   } catch (err) {
     console.error('❌ Error processing file (new allocator):', err);
     res.status(500).json({ error: 'Error processing Excel file', details: err.message });
   }
 });
 
-async function saveNewAllocationToMongo(runResult) {
-  try {
-    for (const w of runResult.weeksResults) {
-      const headers = w.dateHeaders || [];
-      // Upsert parts
-      for (const p of w.parts) {
-        try {
-          // sanitize numeric fields to avoid NaN being written to Number schema fields
-          const safeOriginalLine = (p.originalLine === null || p.originalLine === undefined || isNaN(Number(p.originalLine))) ? null : Number(p.originalLine);
-          const safeCycleTime = (p.cycleTime === null || p.cycleTime === undefined || isNaN(Number(p.cycleTime))) ? 1 : Number(p.cycleTime);
-          const safeWeeklyQty = (p.weeklyQty === null || p.weeklyQty === undefined || isNaN(Number(p.weeklyQty))) ? 0 : Number(p.weeklyQty);
-          const safeRemaining = (p.remainingQty === null || p.remainingQty === undefined || isNaN(Number(p.remainingQty))) ? 0 : Number(p.remainingQty);
-
-          const doc = {
-            spec: p.spec,
-            weekColumn: w.weekColumn,
-            rowIndex: (p.rowIndex === null || p.rowIndex === undefined || isNaN(Number(p.rowIndex))) ? -1 : Number(p.rowIndex),
-            originalLine: safeOriginalLine,
-            cycleTime: safeCycleTime,
-            weeklyQty: safeWeeklyQty,
-            remainingQty: safeRemaining,
-            allocations: (p.allocations || []).map(a => ({
-              dayIndex: a.dayIndex,
-              dateHeader: headers[a.dayIndex] != null ? String(headers[a.dayIndex]) : String(a.dayIndex),
-              line: (a.lineUsed === null || a.lineUsed === undefined || isNaN(Number(a.lineUsed))) ? null : Number(a.lineUsed),
-              qty: (a.qty === null || a.qty === undefined || isNaN(Number(a.qty))) ? 0 : Number(a.qty),
-              minutes: ((a.qty || 0) * safeCycleTime)
-            }))
-          };
-          await Part.findOneAndUpdate(
-            { spec: doc.spec, weekColumn: doc.weekColumn, rowIndex: doc.rowIndex },
-            doc,
-            { upsert: true, new: true }
-          );
-        } catch (e) {
-          console.error('❌ Part upsert failed:', {
-            weekColumn: w.weekColumn,
-            spec: p.spec,
-            rowIndex: p.rowIndex,
-            error: e?.message
-          });
-        }
-      }
-      // Upsert line/day minutes
-      for (const day of (w.lineDayMinutes || [])) {
-        const di = day.dayIndex;
-        for (const lineKey of Object.keys(day.lines)) {
-          try {
-            const lineNum = Number(lineKey);
-            const minutes = day.lines[lineKey];
-            await LineDay.findOneAndUpdate(
-              { weekColumn: w.weekColumn, dayIndex: di, line: lineNum },
-              {
-                weekColumn: w.weekColumn,
-                dayIndex: di,
-                dateHeader: headers[di] != null ? String(headers[di]) : String(di),
-                line: lineNum,
-                capacityMinutes: (minutes.used || 0) + (minutes.remaining || 0),
-                usedMinutes: minutes.used || 0,
-                remainingMinutes: minutes.remaining || 0
-              },
-              { upsert: true, new: true }
-            );
-          } catch (e) {
-            console.error('❌ LineDay upsert failed:', {
-              weekColumn: w.weekColumn,
-              dayIndex: di,
-              line: lineKey,
-              error: e?.message
-            });
-          }
-        }
-      }
-    }
-    console.log('✅ New allocation data saved to MongoDB');
-  } catch (err) {
-    console.error('❌ Error saving new allocation to MongoDB:', err);
-    // Do not throw: persistence failure shouldn’t block the upload flow
-  }
-}
-
-// Helper function to save data to MongoDB
-async function saveToDatabase(items, lines, dayKeys, allocationResult) {
-  try {
-    // Upsert items
-    for (const item of items) {
-      await Item.findOneAndUpdate(
-        { itemId: item.itemId },
-        item,
-        { upsert: true, new: true }
-      );
-    }
-    
-    // Upsert lines
-    for (const line of lines) {
-      if (line.date) {
-        await Line.findOneAndUpdate(
-          { lineName: line.lineName, date: line.date },
-          line,
-          { upsert: true, new: true }
-        );
-      }
-    }
-    
-    // Replace schedules for the date range
-    const startDate = new Date(dayKeys[0]);
-    const endDate = new Date(dayKeys[dayKeys.length - 1]);
-    
-    // Remove existing schedules in the date range
-    await Schedule.deleteMany({
-      date: { $gte: startDate, $lte: endDate }
-    });
-    
-    // Create new schedules for each day
-    for (let i = 0; i < dayKeys.length; i++) {
-      const day = dayKeys[i];
-      const dayUtilization = allocationResult.lineUtilization[day];
-      
-      if (dayUtilization) {
-        const itemsPlanned = [];
-        const lineUtilization = [];
-        
-        // Collect items planned for this day
-        items.forEach(item => {
-          if (item.dailyAllocations[i] > 0) {
-            item.lineAssignments.forEach(assignment => {
-              if (assignment.quantity > 0) {
-                itemsPlanned.push({
-                  itemId: item.itemId,
-                  line: assignment.line,
-                  quantity: assignment.quantity,
-                  plannedMinutes: assignment.minutesUsed
-                });
-              }
-            });
-          }
-        });
-        
-        // Collect line utilization for this day
-        Object.keys(dayUtilization).forEach(lineName => {
-          const lineData = dayUtilization[lineName];
-          lineUtilization.push({
-            line: lineName,
-            plannedMinutes: lineData.plannedMinutes,
-            remainingMinutes: lineData.remainingMinutes,
-            efficiency: lineData.efficiency
-          });
-        });
-        
-        // Create schedule document
-        const schedule = new Schedule({
-          date: new Date(day),
-          itemsPlanned,
-          lineUtilization,
-          totalPlanned: itemsPlanned.reduce((sum, item) => sum + item.quantity, 0),
-          notes: `Generated allocation for ${day}`
-        });
-        
-        await schedule.save();
-      }
-    }
-    
-    console.log("✅ Data saved to MongoDB successfully");
-  } catch (error) {
-    console.error("❌ Error saving to MongoDB:", error);
-    throw error;
-  }
-}
-
-// GET endpoints
-app.get('/items', async (req, res) => {
-  try {
-    const items = await Item.find({}, 'itemId customer componentUnit feasibility dailyAllocations lineAssignments');
-    res.json(items);
-  } catch (error) {
-    console.error("❌ Error fetching items:", error);
-    res.status(500).json({ error: "Error fetching items" });
-  }
-});
-
-app.get('/lines', async (req, res) => {
-  try {
-    const lines = await Line.find({}, 'lineName date availableMinutes manpower efficiency targetEfficiency');
-    res.json(lines);
-  } catch (error) {
-    console.error("❌ Error fetching lines:", error);
-    res.status(500).json({ error: "Error fetching lines" });
-  }
-});
-
-app.get('/schedule', async (req, res) => {
-  try {
-    const { date } = req.query;
-    
-    if (!date) {
-      return res.status(400).json({ error: "Date parameter is required (YYYY-MM-DD)" });
-    }
-    
-    const startDate = new Date(date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 9); // 10-day range
-    
-    const schedules = await Schedule.find({
-      date: { $gte: startDate, $lte: endDate }
-    }).sort({ date: 1 });
-    
-    // Format response for 10-day grid
-    const response = {
-      dateRange: {
-        start: startDate.toISOString().split('T')[0],
-        end: endDate.toISOString().split('T')[0]
-      },
-      dailySchedules: schedules.map(schedule => ({
-        date: schedule.date.toISOString().split('T')[0],
-        itemsPlanned: schedule.itemsPlanned,
-        lineUtilization: schedule.lineUtilization,
-        totalPlanned: schedule.totalPlanned
-      }))
-    };
-    
-    res.json(response);
-  } catch (error) {
-    console.error("❌ Error fetching schedule:", error);
-    res.status(500).json({ error: "Error fetching schedule" });
-  }
-});
+// No persistent storage endpoints (kept for compatibility)
+app.get('/items', (req, res) => res.status(410).json({ error: 'Not available (no persistent storage enabled)' }));
+app.get('/lines', (req, res) => res.status(410).json({ error: 'Not available (no persistent storage enabled)' }));
+app.get('/schedule', (req, res) => res.status(410).json({ error: 'Not available (no persistent storage enabled)' }));
 
 // GET allocation summaries for frontend
-app.get('/allocation/weeks', async (req, res) => {
+app.get('/allocation/weeks', (req, res) => {
   try {
-    const weekColumns = await Part.distinct('weekColumn');
-    const results = [];
-    for (const w of weekColumns) {
-      const parts = await Part.find({ weekColumn: w });
+    if (!lastRun || !Array.isArray(lastRun.weeksResults)) return res.json({ weeks: [] });
+
+    const results = lastRun.weeksResults.map(wr => {
+      const parts = wr.parts || [];
       const SUM = parts.reduce((s, p) => s + (Number(p.weeklyQty) || 0), 0);
       const CountOfParts = parts.filter(p => (Number(p.weeklyQty) || 0) > 0).length;
-
-      const lineDays = await LineDay.find({ weekColumn: w });
-      const maxDay = lineDays.reduce((m, d) => Math.max(m, Number(d.dayIndex || -1)), -1);
-      const actualWorkingDays = maxDay >= 0 ? maxDay + 1 : 0;
+      const actualWorkingDays = Number(wr.actualWorkingDays) || 0;
 
       const lineTotals = { 1: { allocated: 0, remaining: 0 }, 2: { allocated: 0, remaining: 0 }, 3: { allocated: 0, remaining: 0 }, 4: { allocated: 0, remaining: 0 } };
       parts.forEach(p => {
@@ -324,20 +121,25 @@ app.get('/allocation/weeks', async (req, res) => {
       });
 
       const perLineMinutes = { 1: { used: 0, capacity: 0 }, 2: { used: 0, capacity: 0 }, 3: { used: 0, capacity: 0 }, 4: { used: 0, capacity: 0 } };
-      lineDays.forEach(ld => {
-        const ln = Number(ld.line);
-        if (!perLineMinutes[ln]) perLineMinutes[ln] = { used: 0, capacity: 0 };
-        perLineMinutes[ln].used += Number(ld.usedMinutes) || 0;
-        perLineMinutes[ln].capacity += Number(ld.capacityMinutes) || 0;
+      (wr.lineDayMinutes || []).forEach(day => {
+        const lines = day.lines || {};
+        Object.keys(lines).forEach(k => {
+          const ln = Number(k);
+          if (!perLineMinutes[ln]) perLineMinutes[ln] = { used: 0, capacity: 0 };
+          const used = Number(lines[k]?.used) || 0;
+          const remaining = Number(lines[k]?.remaining) || 0;
+          perLineMinutes[ln].used += used;
+          perLineMinutes[ln].capacity += used + remaining;
+        });
       });
 
-      const lines = [1,2,3,4].map(ln => {
+      const lines = [1, 2, 3, 4].map(ln => {
         const allocParts = lineTotals[ln]?.allocated || 0;
         const remainingParts = lineTotals[ln]?.remaining || 0;
         const usedMin = perLineMinutes[ln]?.used || 0;
         const capMin = perLineMinutes[ln]?.capacity || 0;
-        const efficiency = capMin > 0 ? +( (usedMin / capMin) * 100 ).toFixed(2) : 0;
-        const avgPartsPerDay = (actualWorkingDays > 0) ? +(allocParts / actualWorkingDays).toFixed(2) : 0;
+        const efficiency = capMin > 0 ? +((usedMin / capMin) * 100).toFixed(2) : 0;
+        const avgPartsPerDay = actualWorkingDays > 0 ? +(allocParts / actualWorkingDays).toFixed(2) : 0;
         return {
           line: ln,
           allocatedParts: allocParts,
@@ -350,27 +152,79 @@ app.get('/allocation/weeks', async (req, res) => {
         };
       });
 
-      results.push({ weekColumn: w, SUM, CountOfParts, actualWorkingDays, lineTotals, lines });
-    }
-    res.json({ weeks: results });
+      return { weekColumn: wr.weekColumn, SUM, CountOfParts, actualWorkingDays, lineTotals, lines };
+    });
+
+    return res.json({ weeks: results });
   } catch (err) {
-    console.error('❌ Error fetching allocation weeks:', err);
-    res.status(500).json({ error: 'Error fetching allocation weeks' });
+    console.error('❌ Error fetching allocation weeks (in-memory):', err);
+    return res.status(500).json({ error: 'Error fetching allocation weeks' });
   }
 });
 
 // GET detailed allocation for a single week
-app.get('/allocation/week/:weekColumn', async (req, res) => {
+app.get('/allocation/week/:weekColumn', (req, res) => {
   try {
     const { weekColumn } = req.params;
-    const parts = await Part.find({ weekColumn }).lean();
-    const lineDays = await LineDay.find({ weekColumn }).sort({ dayIndex: 1 }).lean();
-    res.json({ weekColumn, parts, lineDays });
+    if (!lastRun || !Array.isArray(lastRun.weeksResults)) {
+      return res.json({ weekColumn, parts: [], lineDays: [] });
+    }
+
+    const wr = lastRun.weeksResults.find(w => String(w.weekColumn) === String(weekColumn));
+    if (!wr) return res.json({ weekColumn, parts: [], lineDays: [] });
+
+    const parts = (wr.parts || []).map(p => ({
+      spec: p.spec,
+      weekColumn: wr.weekColumn,
+      rowIndex: p.rowIndex,
+      originalLine: p.originalLine,
+      cycleTime: p.cycleTime,
+      weeklyQty: p.weeklyQty,
+      remainingQty: p.remainingQty,
+      allocations: p.allocations || []
+    }));
+
+    const headers = wr.dateHeaders || [];
+    const lineDays = [];
+    (wr.lineDayMinutes || []).forEach(day => {
+      const di = Number(day.dayIndex) || 0;
+      const dateHeader = headers[di] != null ? String(headers[di]) : String(di);
+      const lines = day.lines || {};
+      Object.keys(lines).forEach(k => {
+        const ln = Number(k);
+        const used = Number(lines[k]?.used) || 0;
+        const remaining = Number(lines[k]?.remaining) || 0;
+        lineDays.push({
+          weekColumn: wr.weekColumn,
+          dayIndex: di,
+          dateHeader,
+          line: ln,
+          capacityMinutes: used + remaining,
+          usedMinutes: used,
+          remainingMinutes: remaining
+        });
+      });
+    });
+
+    lineDays.sort((a, b) => (a.dayIndex - b.dayIndex) || (a.line - b.line));
+    return res.json({ weekColumn, parts, lineDays });
   } catch (err) {
-    console.error('❌ Error fetching allocation week detail:', err);
-    res.status(500).json({ error: 'Error fetching allocation week detail' });
+    console.error('❌ Error fetching allocation week detail (in-memory):', err);
+    return res.status(500).json({ error: 'Error fetching allocation week detail' });
   }
 });
 
-const PORT = 4000
-app.listen(PORT, ()=>console.log(`server running at port ${PORT}`))
+// Serve the built frontend (Vite build output) from the same local server.
+const clientDistPath = path.join(__dirname, '../client/scheduler-fe/dist');
+app.use(express.static(clientDistPath));
+
+// SPA fallback (must be AFTER API routes)
+app.get(/.*/, (req, res) => {
+  const indexPath = path.join(clientDistPath, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) res.status(404).send('Not found');
+  });
+});
+
+const PORT = Number(process.env.PORT || 4000);
+app.listen(PORT, () => console.log(`server running on port ${PORT}`));

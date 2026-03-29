@@ -52,20 +52,11 @@ const FileUpload = () => {
 
         {result && (
           <div className="mt-6 text-left">
-            <h4 className="font-medium mb-2">Allocation Result</h4>
+            <h4 className="font-medium mb-2">Upload Complete</h4>
             <div className="text-sm text-gray-700">
               <div><strong>Output file:</strong> {result.outputFileName}</div>
-              <div className="mt-2"><strong>Weeks:</strong></div>
-              <ul className="list-disc ml-6 mt-2">
-                {result.weeks && result.weeks.map((w, idx) => (
-                  <li key={idx} className="mb-1">
-                    <strong>{w.weekColumn}</strong>: SUM={w.SUM}, Count={w.CountOfParts}, actualWorkingDays={w.actualWorkingDays}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="mt-4">
-              <a href={result.outputPath} target="_blank" rel="noreferrer" className="text-blue-600 underline">Open output file</a>
+              <div className="mt-2">Your processed Excel file should download automatically.</div>
+              <div className="mt-1">To view week summaries, open the <strong>Schedule</strong> tab.</div>
             </div>
           </div>
         )}
