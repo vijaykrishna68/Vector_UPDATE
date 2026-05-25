@@ -37,6 +37,13 @@ class AllocationEngine {
     this.FACTORY_DAILY_CAP = 3000; // used for actualWorkingDays calc
   }
 
+  addError(errors, err) {
+    if (!Array.isArray(errors)) return;
+    if (!err || typeof err !== 'object') return;
+    if (!err.type || !err.message) return;
+    errors.push(err);
+  }
+
   generateOutputFilename() {
     const now = new Date();
     const timestamp = now.toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '_');
@@ -63,14 +70,15 @@ class AllocationEngine {
   }
 
   // Parse parts for a given week column (BU/BV/BW)
-  parseWeekParts(sheet1, weekLetter) {
+  // Includes basic input validation and merges duplicates by (spec + week).
+  parseWeekParts(sheet1, weekLetter, errors) {
     const range = XLSX.utils.decode_range(sheet1['!ref']);
     const weekColIdx = colLetterToIndex(weekLetter);
     const specColIdx = colLetterToIndex('B');
     const lineColIdx = colLetterToIndex('D');
     const cycleColIdx = colLetterToIndex('H');
     const compUnitColIdx = colLetterToIndex('J');
-    const parts = [];
+    const partsByKey = new Map();
     for (let r = 0; r <= range.e.r; r++) {
       // Component Unit filter (Column J == 'PC')
       const compAddr = XLSX.utils.encode_cell({ r, c: compUnitColIdx });
@@ -83,24 +91,68 @@ class AllocationEngine {
       const weekCell = sheet1[XLSX.utils.encode_cell({ r, c: weekColIdx })];
 
       const spec = specCell ? String(specCell.v).trim() : null;
-      if (!spec) continue;
+      if (!spec) {
+        this.addError(errors, {
+          type: 'INVALID_INPUT',
+          week: weekLetter,
+          message: `Missing spec (required) at row ${r + 1}`
+        });
+        continue;
+      }
       const originalLineRaw = lineCell ? lineCell.v : null;
       const originalLineNum = originalLineRaw === null || originalLineRaw === undefined ? null : Number(originalLineRaw);
       const originalLine = (originalLineNum === null || isNaN(originalLineNum)) ? null : originalLineNum;
-      const cycleTime = cycleCell ? Number(cycleCell.v) : 0;
+
+      const cycleTime = cycleCell ? Number(cycleCell.v) : NaN;
       const weeklyQty = weekCell ? Number(weekCell.v) : 0;
 
-      parts.push({
+      if (!Number.isFinite(cycleTime) || cycleTime <= 0) {
+        this.addError(errors, {
+          type: 'INVALID_INPUT',
+          spec,
+          week: weekLetter,
+          message: `Invalid cycleTime (<= 0) for spec "${spec}" at row ${r + 1}`
+        });
+        continue;
+      }
+
+      if (!Number.isFinite(weeklyQty) || weeklyQty < 0) {
+        this.addError(errors, {
+          type: 'INVALID_INPUT',
+          spec,
+          week: weekLetter,
+          message: `Invalid weeklyQty (negative) for spec "${spec}" at row ${r + 1}`
+        });
+        continue;
+      }
+
+      const key = `${spec}__${weekLetter}`;
+      const existing = partsByKey.get(key);
+      if (existing) {
+        existing.weeklyQty += weeklyQty;
+        existing.remainingQty += weeklyQty;
+        if (existing.cycleTime !== cycleTime) {
+          this.addError(errors, {
+            type: 'DUPLICATE_MERGED',
+            spec,
+            week: weekLetter,
+            message: `Merged duplicate (spec + week) for "${spec}". Kept cycleTime=${existing.cycleTime}, ignored cycleTime=${cycleTime} from row ${r + 1}`
+          });
+        }
+        continue;
+      }
+
+      partsByKey.set(key, {
         rowIndex: r,
         spec,
         originalLine,
-        cycleTime: cycleTime > 0 ? cycleTime : 1,
+        cycleTime,
         weeklyQty,
         remainingQty: weeklyQty,
         allocations: [] // { dayIndex, qty, lineUsed }
       });
     }
-    return parts;
+    return Array.from(partsByKey.values());
   }
 
   // Compute SUM & CountOfParts
@@ -280,6 +332,7 @@ class AllocationEngine {
   }
 
   run(workbook) {
+    const errors = [];
     const sheet1Name = this.detectSheet1(workbook);
     const sheet3Name = this.detectSheet3(workbook, sheet1Name);
     const sheet1 = workbook.Sheets[sheet1Name];
@@ -292,7 +345,7 @@ class AllocationEngine {
 
     const weeksResults = [];
     this.WEEK_COLUMNS.forEach((wk, wkIdx) => {
-      const parts = this.parseWeekParts(sheet1, wk.letter);
+      const parts = this.parseWeekParts(sheet1, wk.letter, errors);
       const { SUM, CountOfParts } = this.summarizeWeek(parts);
       let actualWorkingDaysRaw = SUM / this.FACTORY_DAILY_CAP;
       let actualWorkingDays = SUM === 0 ? 0 : Math.ceil(actualWorkingDaysRaw);
@@ -301,6 +354,44 @@ class AllocationEngine {
       if (SUM > 0) {
         allocation = this.allocateWeek(parts, dateCols, actualWorkingDays);
         this.writeWeekAllocations(sheet1, allocation.parts, dateCols, actualWorkingDays);
+
+        // NO_CAPACITY: any remaining quantity after allocation.
+        allocation.parts.forEach((p) => {
+          if ((Number(p.remainingQty) || 0) > 0) {
+            this.addError(errors, {
+              type: 'NO_CAPACITY',
+              spec: p.spec,
+              week: wk.letter,
+              message: `Remaining quantity could not be allocated for spec "${p.spec}" (remaining=${p.remainingQty})`
+            });
+          }
+        });
+
+        // OVERLOAD: total demand minutes exceeds total available minutes.
+        const demandMinutes = allocation.parts.reduce(
+          (s, p) => s + (Number(p.weeklyQty) || 0) * (Number(p.cycleTime) || 0),
+          0
+        );
+        const capacityMinutes = (allocation.lineDayMinutes || []).reduce((daySum, day) => {
+          const lines = day || {};
+          return (
+            daySum +
+            Object.keys(lines).reduce((ls, k) => {
+              const used = Number(lines[k]?.used) || 0;
+              const remaining = Number(lines[k]?.remaining) || 0;
+              return ls + used + remaining;
+            }, 0)
+          );
+        }, 0);
+        const overloadMinutes = demandMinutes - capacityMinutes;
+        if (overloadMinutes > 0) {
+          this.addError(errors, {
+            type: 'OVERLOAD',
+            week: wk.letter,
+            overloadMinutes: Math.ceil(overloadMinutes),
+            message: `Total demand exceeds total capacity by ${Math.ceil(overloadMinutes)} minutes for week ${wk.letter}`
+          });
+        }
       }
       weeksResults.push({
         weekColumn: wk.letter,
@@ -322,7 +413,7 @@ class AllocationEngine {
       });
     });
 
-    return { sheet1Name, sheet3Name, weeksResults };
+    return { sheet1Name, sheet3Name, weeksResults, errors };
   }
 
   buildLineTotals(parts) {
