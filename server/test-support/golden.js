@@ -48,6 +48,24 @@ function digest(value) {
 }
 
 /**
+ * Normalise line endings before comparing.
+ *
+ * Golden files are always WRITTEN with '\n', but Git for Windows checks them out
+ * with CRLF when core.autocrlf=true (its default). An exact string comparison
+ * therefore failed on any fresh Windows clone even though the content was
+ * identical — measured as an 854-byte difference on a 18,836-byte golden, exactly
+ * the number of CR characters.
+ *
+ * This does NOT weaken the verification: line endings are not part of the golden's
+ * semantic content, and every real difference (values, keys, ordering, additions,
+ * removals) still fails the comparison. .gitattributes pins these files to LF as
+ * well, so this is the second layer of the same guarantee.
+ */
+function normaliseEol(text) {
+  return String(text).replace(/\r\n/g, '\n');
+}
+
+/**
  * Compare `actual` against the stored golden for `name`.
  * @param {string} name  Golden file basename (no extension).
  * @param {unknown} actual
@@ -70,9 +88,12 @@ function assertMatchesGolden(name, actual, opts = {}) {
     return { created: true, updated: false, file };
   }
 
-  const expected = fs.readFileSync(file, 'utf8').trim();
+  // Both sides are normalised identically, so the comparison stays deterministic
+  // and depends only on content — never on how git checked the file out.
+  const expected = normaliseEol(fs.readFileSync(file, 'utf8')).trim();
+  const actualEncoded = normaliseEol(encoded).trim();
   assert.equal(
-    encoded,
+    actualEncoded,
     expected,
     `Golden mismatch for "${name}".\n` +
       `Engine behavior changed relative to ${path.relative(process.cwd(), file)}.\n` +
