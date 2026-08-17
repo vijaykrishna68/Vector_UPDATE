@@ -1,89 +1,82 @@
-const ProductionLineCard = ({ line, isExpanded, onClick }) => {
-  const usagePct = line.capacityMinutes > 0 ? (line.usedMinutes / line.capacityMinutes) * 100 : 0;
+import { Card, Label, Meter, StatusBadge } from './ui';
+import { formatInt, formatMinutes, formatPercent } from '../lib/format';
+import { lineStatus, STATUS } from '../lib/status';
+
+/**
+ * One production line, aggregated across the run's weeks.
+ *
+ * Utilisation is shown as a figure and a meter but does NOT drive the status —
+ * see lib/status.js for why (the workbook targets 100%, so "high" is the goal).
+ * Status comes from unmet demand, which is unambiguous.
+ */
+export default function ProductionLineCard({ line }) {
+  const status = lineStatus(line);
+  const utilisation = line.capacityMinutes > 0 ? (line.usedMinutes / line.capacityMinutes) * 100 : null;
+  const availableMinutes = Math.max(0, line.capacityMinutes - line.usedMinutes);
+
   return (
-    <div
-      className={`rounded-lg shadow-sm border p-6 cursor-pointer transition-all duration-300 hover:shadow-md ${
-        isExpanded ? 'col-span-2 row-span-2' : ''
-      } ${
-        line.color === 'Green'
-          ? 'bg-green-50 border-green-200'
-          : line.color === 'Blue'
-          ? 'bg-blue-50 border-blue-200'
-          : line.color === 'Yellow'
-          ? 'bg-yellow-50 border-yellow-200'
-          : line.color === 'Orange'
-          ? 'bg-red-50 border-red-200'
-          : 'bg-white border-gray-200'
-      }`}
-      onClick={() => onClick(line.id)}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">{line.name}</h3>
-        <span className="px-2 py-1 text-xs font-medium rounded-full border bg-white text-gray-700">Active</span>
+    <Card as="section" aria-labelledby={`line-${line.line}-heading`} className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Label>Line</Label>
+          <h3
+            id={`line-${line.line}-heading`}
+            className="font-mono text-2xl leading-none font-semibold tabular-nums text-slate-900"
+          >
+            {line.line}
+          </h3>
+        </div>
+        <StatusBadge status={status} />
       </div>
 
-      <div className="space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Efficiency</span>
-          <span className="text-sm font-medium text-gray-900">{line.efficiency}%</span>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+        <div>
+          <dt>
+            <Label>Allocated</Label>
+          </dt>
+          <dd className="font-mono text-lg font-medium tabular-nums text-slate-900">
+            {formatInt(line.allocatedParts)}
+          </dd>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Minutes Used</span>
-          <span className="text-sm font-medium text-gray-900">{(Number(line.usedMinutes) || 0).toFixed(2)}/{(Number(line.capacityMinutes) || 0).toFixed(2)}</span>
+        <div>
+          <dt>
+            <Label>Remaining</Label>
+          </dt>
+          <dd
+            className={`font-mono text-lg font-medium tabular-nums ${
+              line.remainingParts > 0 ? 'text-red-700' : 'text-slate-400'
+            }`}
+          >
+            {formatInt(line.remainingParts)}
+          </dd>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Working Days</span>
-          <span className="text-sm font-medium text-gray-900">{line.workingDays}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Parts Scheduled</span>
-          <span className="text-sm font-medium text-gray-900">{line.scheduledSum}</span>
-        </div>
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Avg Parts/Day</span>
-          <span className="text-sm font-medium text-gray-900">{line.avgPartsPerDay}</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2" title={`Usage ${usagePct.toFixed(1)}%`}>
-          <div
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${usagePct}%` }}
-          ></div>
-        </div>
-      </div>
+      </dl>
 
-      {isExpanded && (
-        <div className="mt-6 border-t pt-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Weekly Breakdown</h4>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead>
-                  <tr className="text-left text-gray-600">
-                    <th className="py-1 pr-4 font-medium">Week</th>
-                    <th className="py-1 pr-4 font-medium">Allocated</th>
-                    <th className="py-1 pr-4 font-medium">Remaining</th>
-                    <th className="py-1 pr-4 font-medium">Efficiency</th>
-                    <th className="py-1 pr-4 font-medium">Avg Parts/Day</th>
-                    <th className="py-1 pr-4 font-medium">Days</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {line.weeks.map((w,i) => (
-                    <tr key={i} className="border-t border-gray-200">
-                      <td className="py-1 pr-4">{w.weekColumn}</td>
-                      <td className="py-1 pr-4">{w.allocatedParts}</td>
-                      <td className="py-1 pr-4">{w.remainingParts}</td>
-                      <td className="py-1 pr-4">{w.efficiency}%</td>
-                      <td className="py-1 pr-4">{w.avgPartsPerDay}</td>
-                      <td className="py-1 pr-4">{w.workingDays}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between">
+          <Label>Utilisation</Label>
+          <span className="font-mono text-sm font-medium tabular-nums text-slate-900">
+            {utilisation === null ? '—' : formatPercent(utilisation)}
+          </span>
         </div>
-      )}
-    </div>
+        <div className="mt-1.5">
+          <Meter
+            value={utilisation ?? 0}
+            tone={utilisation === null ? STATUS.nodata.bar : 'bg-slate-700'}
+            label={`Line ${line.line} utilisation`}
+          />
+        </div>
+        <dl className="mt-2 flex justify-between text-xs text-slate-500">
+          <div className="flex gap-1">
+            <dt>Used</dt>
+            <dd className="font-mono tabular-nums text-slate-700">{formatMinutes(line.usedMinutes)}</dd>
+          </div>
+          <div className="flex gap-1">
+            <dt>Available</dt>
+            <dd className="font-mono tabular-nums text-slate-700">{formatMinutes(availableMinutes)}</dd>
+          </div>
+        </dl>
+      </div>
+    </Card>
   );
-};
-
-export default ProductionLineCard;
+}
