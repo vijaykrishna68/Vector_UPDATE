@@ -4,6 +4,7 @@ import IssuesPanel from './IssuesPanel';
 import {
   Button,
   Card,
+  CapacityRail,
   EmptyState,
   ErrorState,
   FOCUS_RING,
@@ -13,10 +14,12 @@ import {
   StatusBadge,
   Stat
 } from './ui';
-import { formatDateRange, formatInt, formatPercent, formatTimestamp, shortId } from '../lib/format';
+import { formatDateRange, formatInt, formatTimestamp, shortId } from '../lib/format';
 import {
+  decorateIssueGroups,
   issueGroupsForWeek,
   lineStatus,
+  statusForHealth,
   totalAllocated,
   totalRemaining,
   weekStatus
@@ -25,9 +28,10 @@ import {
 /**
  * "What is the current production situation?"
  *
- * Hierarchy: run context -> key metrics -> line capacity -> weeks -> issues.
- * Every figure comes from the backend; nothing is derived beyond summing the
- * per-line values the engine already reported.
+ * The page tells one story top to bottom: did the run succeed, how much
+ * capacity did it take, which lines and weeks need a look, then the
+ * supporting detail. Every figure comes from the backend; nothing here is
+ * derived beyond summing or grouping values the engine already reported.
  */
 export default function Dashboard({ weeksQuery, navigate }) {
   if (weeksQuery.isLoading && !weeksQuery.data) {
@@ -69,7 +73,6 @@ export default function Dashboard({ weeksQuery, navigate }) {
     );
   }
 
-  const weeksWithDemand = weeks.filter((w) => (Number(w.SUM) || 0) > 0);
   // Run-level totals come from the backend (GET /allocation/weeks -> summary), so
   // the dashboard does not re-derive figures the engine already owns.
   const demand = summary?.demand ?? 0;
@@ -77,93 +80,89 @@ export default function Dashboard({ weeksQuery, navigate }) {
   const remaining = summary?.remaining ?? 0;
   const usedMinutes = summary?.usedMinutes ?? 0;
   const capacityMinutes = summary?.capacityMinutes ?? 0;
-  const utilisation = capacityMinutes > 0 ? (usedMinutes / capacityMinutes) * 100 : null;
   const lines = aggregateLines(weeks);
-  const attention = weeks.filter(
-    (w) => weekStatus(w, issueGroupsForWeek(issuesSummary, w.weekColumn)).key !== 'healthy'
-  );
   // The date columns are shared by all three weeks in the source workbook, so this
   // is the run's overall production window — NOT a per-week range. See BUG-1.
   const productionWindow = formatDateRange(weeks[0]?.dateHeaders);
 
+  // run.health already encodes the full precedence the backend applies (no
+  // demand -> unmet demand -> worst issue severity -> healthy), so the headline
+  // reuses it rather than re-deriving the same rule on the client.
+  const runStatus = statusForHealth(run.health);
+  const headline =
+    runStatus.key === 'critical'
+      ? remaining > 0
+        ? `${formatInt(remaining)} parts unallocated`
+        : 'Attention required'
+      : runStatus.key === 'warning'
+        ? 'Run complete — warnings reported'
+        : runStatus.key === 'nodata'
+          ? 'No demand in this run'
+          : 'Run complete';
+
   return (
     <div className="space-y-6">
-      {/* 1 — planning context */}
-      <Card className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-          <div>
-            <Label>Planning run</Label>
-            <p className="font-mono text-sm text-slate-900" title={run.id}>
-              {shortId(run.id)}
-            </p>
-          </div>
-          <div>
-            <Label>Processed</Label>
-            <p className="text-sm text-slate-900">{formatTimestamp(run.createdAt)}</p>
-          </div>
-          <div>
-            <Label>Planning weeks</Label>
-            <p className="font-mono text-sm text-slate-900">
-              {weeks.map((w) => w.weekColumn).join(' · ')}
-            </p>
-          </div>
-          <div>
-            <Label>Production lines</Label>
-            <p className="font-mono text-sm text-slate-900">{lines.length}</p>
-          </div>
-          {productionWindow && (
-            <div>
-              <Label>Production window</Label>
-              <p className="text-sm text-slate-900">{productionWindow}</p>
-            </div>
-          )}
-          <Button
-            variant="secondary"
-            className="ml-auto"
-            icon={ArrowRight}
-            onClick={() => navigate('/schedule')}
-          >
+      {/* Run summary — the whole story, top to bottom, in a few seconds. */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-slate-100 px-4 py-2.5 text-xs text-slate-500">
+          <span>
+            Run <span className="font-mono text-slate-700">{shortId(run.id)}</span>
+          </span>
+          <span>{formatTimestamp(run.createdAt)}</span>
+          <span>
+            Weeks <span className="font-mono text-slate-700">{weeks.map((w) => w.weekColumn).join(' · ')}</span>
+          </span>
+          <span>
+            Lines <span className="font-mono text-slate-700">{lines.length}</span>
+          </span>
+          {productionWindow && <span>{productionWindow}</span>}
+          <Button variant="ghost" className="ml-auto" icon={ArrowRight} onClick={() => navigate('/schedule')}>
             Open schedule
           </Button>
         </div>
+
+        <div className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-[1.1fr_1fr]">
+          <div>
+            <p className={`text-xs font-semibold tracking-widest uppercase ${runStatus.text}`}>{headline}</p>
+            <div className="mt-1.5 flex items-baseline gap-2">
+              <Stat
+                label="Allocated of total demand"
+                value={
+                  <>
+                    {formatInt(allocated)} <span className="text-slate-300">/</span> {formatInt(demand)}
+                  </>
+                }
+                unit="parts"
+                size="lg"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-center border-slate-100 lg:border-l lg:pl-6">
+            <CapacityRail
+              label="Capacity utilisation"
+              usedMinutes={usedMinutes}
+              capacityMinutes={capacityMinutes}
+              size="lg"
+            />
+          </div>
+        </div>
+
+        <dl className="grid grid-cols-2 divide-y divide-slate-100 border-t border-slate-100 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <SupportingStat label="Total demand" value={formatInt(demand)} />
+          <SupportingStat label="Allocated" value={formatInt(allocated)} />
+          <SupportingStat
+            label="Unallocated"
+            value={formatInt(remaining)}
+            tone={remaining > 0 ? 'text-red-700' : undefined}
+          />
+          <SupportingStat label="Capacity used" value={formatInt(usedMinutes)} hint={`of ${formatInt(capacityMinutes)} min`} />
+        </dl>
       </Card>
 
-      {/* 2 — key metrics */}
-      <section aria-labelledby="metrics-heading">
-        <h2 id="metrics-heading" className="sr-only">
-          Key production metrics
-        </h2>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <Card className="p-4">
-            <Stat label="Total demand" value={formatInt(demand)} unit="parts" emphasis />
-          </Card>
-          <Card className="p-4">
-            <Stat
-              label="Allocated"
-              value={formatInt(allocated)}
-              unit="parts"
-              emphasis
-              hint={demand > 0 ? `${formatPercent((allocated / demand) * 100)} of demand` : undefined}
-            />
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-start justify-between gap-2">
-              <Stat label="Unallocated" value={formatInt(remaining)} unit="parts" emphasis />
-              {remaining > 0 && <StatusBadge status={weekStatus({ SUM: 1, lines: [{ remainingParts: 1 }] })} />}
-            </div>
-          </Card>
-          <Card className="p-4">
-            <Stat
-              label="Capacity used"
-              value={utilisation === null ? '—' : formatPercent(utilisation)}
-              emphasis
-              hint={`${formatInt(usedMinutes)} of ${formatInt(capacityMinutes)} min scheduled`}
-            />
-          </Card>
-        </div>
-      </section>
+      <AttentionSummary issuesSummary={issuesSummary} lines={lines} />
 
-      {/* 3 — line capacity */}
+      {/* Production lines */}
       <section aria-labelledby="lines-heading">
         <SectionHeader
           title="Production lines"
@@ -179,38 +178,107 @@ export default function Dashboard({ weeksQuery, navigate }) {
         </div>
       </section>
 
-      {/* 4 — weeks */}
+      {/* Planning weeks — a sequence, not three unrelated cards: BU then BV then
+          BW share one production calendar (see CLAUDE.md's confirmed rules). */}
       <section aria-labelledby="weeks-heading">
         <SectionHeader
           title="Planning weeks"
-          description={
-            attention.length > 0
-              ? `${attention.length} of ${weeks.length} weeks need attention.`
-              : 'All weeks scheduled without unmet demand.'
-          }
+          description="BU → BV → BW — demand buckets processed in order against one shared production calendar."
         />
         <h2 id="weeks-heading" className="sr-only">
-          Weeks requiring attention
+          Planning weeks
         </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {weeks.map((week) => (
-            <WeekTile
-              key={week.weekColumn}
-              week={week}
-              issueGroups={issueGroupsForWeek(issuesSummary, week.weekColumn)}
-              onOpen={() => navigate(`/schedule/${encodeURIComponent(week.weekColumn)}`)}
-            />
+        <div className="flex flex-col gap-3 md:flex-row md:items-start">
+          {weeks.map((week, i) => (
+            <div key={week.weekColumn} className="flex flex-1 items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <WeekTile
+                  week={week}
+                  issueGroups={issueGroupsForWeek(issuesSummary, week.weekColumn)}
+                  onOpen={() => navigate(`/schedule/${encodeURIComponent(week.weekColumn)}`)}
+                />
+              </div>
+              {i < weeks.length - 1 && (
+                <ArrowRight
+                  className="mt-16 hidden h-4 w-4 shrink-0 text-slate-300 md:block"
+                  aria-hidden="true"
+                />
+              )}
+            </div>
           ))}
         </div>
-        {weeksWithDemand.length === 0 && (
+        {weeks.every((w) => (Number(w.SUM) || 0) === 0) && (
           <p className="mt-3 text-sm text-slate-500">
             No week in this run carried any demand after filtering.
           </p>
         )}
       </section>
 
-      {/* 5 — issues */}
-      <IssuesPanel issuesSummary={issuesSummary} runId={run.id} />
+      {/* Issues — the full, browsable diagnostic list. AttentionSummary above
+          links here; the id is the jump target, not a visual change to the panel. */}
+      <div id="schedule-health">
+        <IssuesPanel issuesSummary={issuesSummary} runId={run.id} />
+      </div>
+    </div>
+  );
+}
+
+/** A KPI without its own bordered box — one of four columns sharing dividers. */
+function SupportingStat({ label, value, hint, tone }) {
+  return (
+    <div className="px-4 py-3">
+      <Label>{label}</Label>
+      <p className={`mt-1 font-mono text-lg font-medium tabular-nums ${tone || 'text-slate-900'}`}>{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * Consolidates the run's real issue groups and any line with genuine unmet
+ * demand into a short, actionable preview. Renders nothing when there is
+ * nothing to flag — a healthy run does not need an empty "all clear" box on
+ * top of the headline that already says so. Purely informational issue
+ * severities (e.g. skipped/duplicate rows) are left for the full panel below;
+ * this layer is for what actually needs a decision.
+ */
+function AttentionSummary({ issuesSummary, lines }) {
+  const topIssues = decorateIssueGroups(issuesSummary).filter((g) => g.severity !== 'info').slice(0, 2);
+  const attentionLines = lines.filter((l) => l.remainingParts > 0);
+
+  if (topIssues.length === 0 && attentionLines.length === 0) return null;
+
+  const critical = attentionLines.length > 0 || topIssues.some((g) => g.severity === 'critical');
+
+  return (
+    <div className={`border-l-2 px-4 py-3 ${critical ? 'border-red-500 bg-red-50/50' : 'border-amber-500 bg-amber-50/50'}`}>
+      <p className={`text-xs font-semibold tracking-widest uppercase ${critical ? 'text-red-800' : 'text-amber-900'}`}>
+        Attention required
+      </p>
+      <ul className="mt-2 space-y-1 text-sm text-slate-700">
+        {attentionLines.map((l) => (
+          <li key={`line-${l.line}`}>
+            <span className="font-medium text-slate-900">Line {l.line}</span> — {formatInt(l.remainingParts)} parts
+            unmet
+          </li>
+        ))}
+        {topIssues.map((g) => (
+          <li key={g.code}>
+            <span className="font-medium text-slate-900">{g.title}</span>
+            {g.affectedWeeks?.length > 0 && (
+              <span className="text-slate-500"> · weeks {g.affectedWeeks.join(', ')}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <a
+        href="#schedule-health"
+        className={`mt-2 inline-block text-sm font-medium underline underline-offset-2 hover:no-underline ${FOCUS_RING} ${
+          critical ? 'text-red-800' : 'text-amber-900'
+        }`}
+      >
+        View issues →
+      </a>
     </div>
   );
 }
@@ -219,13 +287,21 @@ function WeekTile({ week, issueGroups, onOpen }) {
   const status = weekStatus(week, issueGroups);
   const allocated = totalAllocated(week);
   const remaining = totalRemaining(week);
+  const topReason = decorateIssueGroups(issueGroups).filter((g) => g.severity !== 'info')[0];
+  const weekMinutes = (week.lines || []).reduce(
+    (acc, l) => ({
+      used: acc.used + (Number(l.usedMinutes) || 0),
+      capacity: acc.capacity + (Number(l.capacityMinutes) || 0)
+    }),
+    { used: 0, capacity: 0 }
+  );
 
   return (
     <Card
       as="button"
       type="button"
       onClick={onOpen}
-      className={`p-4 text-left transition-colors hover:border-slate-400 ${FOCUS_RING}`}
+      className={`w-full p-4 text-left transition-colors hover:border-slate-400 ${FOCUS_RING}`}
       aria-label={`Open week ${week.weekColumn}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -235,6 +311,14 @@ function WeekTile({ week, issueGroups, onOpen }) {
         </div>
         <StatusBadge status={status} />
       </div>
+
+      {status.key !== 'healthy' && status.key !== 'nodata' && (
+        <p className={`mt-1.5 text-xs font-medium ${status.text}`}>
+          {remaining > 0 && !topReason
+            ? 'Demand could not be fully allocated'
+            : topReason?.title || 'Reported by the allocator'}
+        </p>
+      )}
 
       <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
         <div>
@@ -253,15 +337,17 @@ function WeekTile({ week, issueGroups, onOpen }) {
           <dt>
             <Label>Remaining</Label>
           </dt>
-          <dd
-            className={`font-mono tabular-nums ${remaining > 0 ? 'text-red-700' : 'text-slate-400'}`}
-          >
+          <dd className={`font-mono tabular-nums ${remaining > 0 ? 'text-red-700' : 'text-slate-400'}`}>
             {formatInt(remaining)}
           </dd>
         </div>
       </dl>
 
-      <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-500">
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <CapacityRail usedMinutes={weekMinutes.used} capacityMinutes={weekMinutes.capacity} />
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
         <span>
           Working days <span className="font-mono text-slate-700">{formatInt(week.actualWorkingDays)}</span>
         </span>

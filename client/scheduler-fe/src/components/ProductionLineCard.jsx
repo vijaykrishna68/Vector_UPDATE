@@ -1,18 +1,21 @@
-import { Card, Label, Meter, StatusBadge } from './ui';
-import { formatInt, formatMinutes, formatPercent } from '../lib/format';
-import { lineStatus, STATUS } from '../lib/status';
+import { CapacityRail, Card, Label, StatusBadge } from './ui';
+import { formatInt } from '../lib/format';
+import { lineStatus } from '../lib/status';
 
 /**
- * One production line, aggregated across the run's weeks.
+ * One production line, aggregated across the run's weeks — an operational
+ * status panel, not a generic metric card: line identity and status come
+ * first, then the one figure that matters most (parts actually allocated),
+ * then capacity. Remaining (unmet) demand only takes up space when it is
+ * non-zero, since a healthy line has none and showing "0" everywhere just
+ * adds noise to the common case.
  *
- * Utilisation is shown as a figure and a meter but does NOT drive the status —
- * see lib/status.js for why (the workbook targets 100%, so "high" is the goal).
+ * Utilisation drives the capacity rail but NOT the status badge — see
+ * lib/status.js for why (the workbook targets 100%, so "high" is the goal).
  * Status comes from unmet demand, which is unambiguous.
  */
 export default function ProductionLineCard({ line }) {
   const status = lineStatus(line);
-  const utilisation = line.capacityMinutes > 0 ? (line.usedMinutes / line.capacityMinutes) * 100 : null;
-  const availableMinutes = Math.max(0, line.capacityMinutes - line.usedMinutes);
 
   return (
     <Card as="section" aria-labelledby={`line-${line.line}-heading`} className="p-4">
@@ -23,59 +26,26 @@ export default function ProductionLineCard({ line }) {
             id={`line-${line.line}-heading`}
             className="font-mono text-2xl leading-none font-semibold tabular-nums text-slate-900"
           >
-            {line.line}
+            {String(line.line).padStart(2, '0')}
           </h3>
         </div>
         <StatusBadge status={status} />
       </div>
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
-        <div>
-          <dt>
-            <Label>Allocated</Label>
-          </dt>
-          <dd className="font-mono text-lg font-medium tabular-nums text-slate-900">
-            {formatInt(line.allocatedParts)}
-          </dd>
-        </div>
-        <div>
-          <dt>
-            <Label>Remaining</Label>
-          </dt>
-          <dd
-            className={`font-mono text-lg font-medium tabular-nums ${
-              line.remainingParts > 0 ? 'text-red-700' : 'text-slate-400'
-            }`}
-          >
-            {formatInt(line.remainingParts)}
-          </dd>
-        </div>
-      </dl>
-
       <div className="mt-4">
-        <div className="flex items-baseline justify-between">
-          <Label>Utilisation</Label>
-          <span className="font-mono text-sm font-medium tabular-nums text-slate-900">
-            {utilisation === null ? '—' : formatPercent(utilisation)}
-          </span>
-        </div>
-        <div className="mt-1.5">
-          <Meter
-            value={utilisation ?? 0}
-            tone={utilisation === null ? STATUS.nodata.bar : 'bg-slate-700'}
-            label={`Line ${line.line} utilisation`}
-          />
-        </div>
-        <dl className="mt-2 flex justify-between text-xs text-slate-500">
-          <div className="flex gap-1">
-            <dt>Used</dt>
-            <dd className="font-mono tabular-nums text-slate-700">{formatMinutes(line.usedMinutes)}</dd>
-          </div>
-          <div className="flex gap-1">
-            <dt>Available</dt>
-            <dd className="font-mono tabular-nums text-slate-700">{formatMinutes(availableMinutes)}</dd>
-          </div>
-        </dl>
+        <Label>Parts allocated</Label>
+        <p className="mt-1 font-mono text-2xl font-semibold tabular-nums tracking-tight text-slate-900">
+          {formatInt(line.allocatedParts)}
+        </p>
+        {line.remainingParts > 0 && (
+          <p className="mt-0.5 text-xs font-medium text-red-700">
+            {formatInt(line.remainingParts)} unmet
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <CapacityRail label="Capacity" usedMinutes={line.usedMinutes} capacityMinutes={line.capacityMinutes} />
       </div>
     </Card>
   );

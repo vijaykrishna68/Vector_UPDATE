@@ -72,6 +72,19 @@ react-router. Routes: `/dashboard`, `/schedule`, `/schedule/:week`, `/upload`,
 `/history`. Note the run-history client route is **`/history`**, because
 `GET /runs` is a real API endpoint and would otherwise return JSON to a browser.
 
+**Frontend visual system** (Phases 5–6, see §7). Brand color tokens live in
+`client/scheduler-fe/src/index.css` (Tailwind v4 `@theme`, `--color-brand-50..900`,
+a steel-blue accent layered over the pre-existing neutral slate scale — used only
+for interactive/identity moments: primary buttons, focus rings, the selected-card
+state, the header logo mark and active nav item). `components/ui.jsx` remains the
+single home for shared styling, and now also exports `CapacityRail` — the one
+recurring "used vs. available capacity" visual (percentage + rail + minute
+figures), reused on the dashboard hero, `ProductionLineCard`, and both
+planning-week views (`Dashboard`'s week tiles and `WeekSummaryList`).
+`lib/status.js`'s `STATUS` map gained a `text` field (bare-text color per status,
+alongside the existing `badge`/`dot`/`bar`) — presentation-only; no severity,
+label or symbol changed.
+
 **Persistence.** Two-phase guard, because the target deployment is a standalone
 mongod which rejects transactions (verified: `IllegalOperation`):
 1. create `Run` as `status:'pending'` (invisible to all readers)
@@ -221,32 +234,56 @@ not covered by the real-workbook suite (it is slow). There is **no CI**.
   `D:/Projects/vector2.0/Vector_UPDATE-backup-pre-rewrite.git` (**do not delete**;
   it is the only copy of the pre-rewrite history).
 - **Cross-platform golden fix** (`c271cc4`) — CRLF normalisation + `.gitattributes`.
-- **BUG-1 fix** — implemented and **committed** (`e4399ce`), not yet pushed (see §8).
+- **BUG-1 fix** — implemented, committed (`e4399ce`) and **pushed**.
+- **Phase 5 — visual identity.** Introduced Vector's brand color system: a
+  steel-blue `brand-50..900` scale (Tailwind v4 `@theme`, see §2) layered over
+  the existing neutral slate UI, applied only to primary actions, focus rings,
+  selection state and the header mark. `lib/status.js`'s STATUS colors and
+  symbols were left completely unchanged.
+- **Phase 6 — UI redesign.** Restructured the Dashboard into a "run summary"
+  hero (real status-derived headline from `run.health`, large allocated/demand
+  figure, a full-width `CapacityRail`) plus a lightweight attention layer built
+  from real issue groups and lines with genuine unmet demand; redesigned
+  `ProductionLineCard` into an operational status panel; redesigned the
+  planning-week presentation (`Dashboard`'s week tiles and `WeekSummaryList`)
+  into a connected BU→BV→BW sequence where each tile shows its real top issue
+  reason instead of just a count; refreshed `AppHeader` with a product subtitle
+  and a real run-status indicator. `CapacityRail` (new in `ui.jsx`) is now the
+  one shared capacity/utilization visual used everywhere capacity is shown. All
+  dashboard data (status, allocation, capacity, attention/issues, planning
+  weeks) is real backend data — nothing invented, no new business thresholds.
+  Backend/allocation logic was **intentionally untouched** in both phases;
+  frontend lint and production build passed after each. The project owner has
+  reviewed and **approved/frozen** this design (see §11 rule 11) — not yet
+  pushed as of this commit; check `git log -1` / `git status` for current state.
 
 ---
 
-## 8. CURRENT LOCAL COMMIT STATE (unpushed)
+## 8. CURRENT LOCAL COMMIT STATE
 
-Branch: **`cleanup/remove-generated-history`** at `e4399ce`.
+Branch: **`cleanup/remove-generated-history`**.
 
-**Committed locally, not pushed** — the BUG-1 fix (`e4399ce fix: share allocation
-capacity across demand buckets`):
-```
-server/allocation.js                            (the fix; production code)
-server/test/allocation.known-bugs.test.js       (BUG-1 tests inverted + new)
-server/test/allocation.golden.test.js           (error-type guard widened)
-server/test/__golden__/synthetic-workbook.json  (regenerated deliberately)
-```
-`test/__golden__/real-workbooks.local.json` was also regenerated (gitignored, never
-committed).
+`e4399ce` (BUG-1 fix) and `4d470d1` (docs: project context) are committed
+**and pushed** — verified by fetch, `origin/cleanup/remove-generated-history`
+matched local at `4d470d1` before the commit described below was made.
 
-**BUG-1 is committed locally; nothing has been pushed.**
+On top of that, this branch now carries one further commit — the Phase 5/6 UI
+freeze (`feat: finalize Vector planning interface`): the brand color system and
+Dashboard/production-line/planning-week/header redesign described in §7, this
+CLAUDE.md update, and `.claude/launch.json` (a shared, secret-free local
+dev-preview launcher for `server/` + `client/scheduler-fe/`, intentionally
+committed — see below). **That commit was not pushed as part of the work that
+created it.** Run `git log -1` and `git status` to confirm current push state
+before assuming either way — it may have been pushed in a later session.
+
+`.claude/launch.json` was inspected before committing: it names only relative
+project paths (`server`, `client/scheduler-fe`) and `npm` script invocations,
+carries no credentials, tokens, or machine-specific absolute paths, and is safe
+to share.
 
 **⚠️ Remote drift:** `origin/updatedbranch` is now `4b873a1`. It was `c416746`
 when last recorded, so it has moved — most likely the cleanup PR was merged, but
 **this was not verified** (no fetch was performed). Confirm before assuming.
-`origin/cleanup/remove-generated-history` is still `c271cc4`; local is now
-**1 commit ahead** (`e4399ce`, unpushed).
 
 ---
 
@@ -254,7 +291,9 @@ when last recorded, so it has moved — most likely the cleanup PR was merged, b
 
 - **Backend: 167/167 passing**, 0 failed, 0 skipped (with MongoDB running).
   Without MongoDB: **130 pass**, the 37 Mongo-dependent tests skip.
-- **Frontend lint: clean.** **Build: passes** (~247 kB JS / ~74 kB gzip).
+- **Frontend lint: clean.** **Build: passes** (~251 kB JS / ~76 kB gzip as of
+  Phase 6 — up slightly from ~247/~74 kB pre-Phase-5; new `CapacityRail` and
+  status-color code, no new dependency added).
 - **Real-workbook validation** after the BUG-1 fix:
   ```
   BU 27,123 allocated, 0 remaining, days 0..10
@@ -289,8 +328,12 @@ when last recorded, so it has moved — most likely the cleanup PR was merged, b
 7. **Generated workbook is not re-downloadable** — it lives only in component
    state; leaving the upload screen loses it. Needs a store + download route.
 8. **Read endpoints are not rate limited** (only `/upload` is).
-9. **Vector visual identity / colour pass** — deliberately deferred. The current
-   neutral system is intentional; do not restyle without being asked.
+9. **Vector visual identity / colour pass — DONE (Phases 5–6).** Brand color
+   system, the Dashboard/production-line/planning-week/header redesign and the
+   `CapacityRail` pattern are implemented and committed (see §7). The project
+   owner has reviewed and **approved/frozen** this design. Do not propose or
+   make further cosmetic/visual redesign unless explicitly requested in a new
+   session — see §11 rule 11.
 10. **Latent**: when `actualWorkingDays` exceeds available date columns, the daily
     target throttles output (measured 31% utilisation while reporting demand
     unschedulable). Real data has ~2.8× headroom, so it is not active.
@@ -325,3 +368,9 @@ when last recorded, so it has moved — most likely the cleanup PR was merged, b
 9. **When a characterisation test fails after a fix, invert it — do not delete
    it.** That is the established protocol.
 10. **`sample/sample.xlsx` is an intentional committed fixture** — do not remove it.
+11. **The frontend visual design is frozen (post Phase 6).** The brand color
+    system and the Dashboard/production-line/planning-week/header redesign were
+    explicitly reviewed and approved by the project owner. Do not propose or
+    make further cosmetic/visual UI changes — colors, spacing, layout,
+    component styling — unless the user explicitly asks for it in a new
+    request. Functional bug fixes to the frontend are unaffected by this rule.

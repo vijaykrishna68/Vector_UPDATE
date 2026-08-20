@@ -1,4 +1,5 @@
 import { AlertTriangle, Inbox, Loader2, RefreshCw } from 'lucide-react';
+import { formatInt, formatPercent } from '../lib/format';
 
 /**
  * The shared visual language. Every component composes these instead of styling
@@ -10,13 +11,23 @@ import { AlertTriangle, Inbox, Loader2, RefreshCw } from 'lucide-react';
  */
 
 export const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2';
 
 /* ------------------------------------------------------------------ surfaces */
 
-export function Card({ children, className = '', as: Tag = 'div', ...rest }) {
+/**
+ * `selected` applies the brand-colored selected treatment centrally, so any
+ * consumer that needs a "this one is chosen" card state (e.g. a week or run
+ * picker) gets the same border/ring instead of styling it ad hoc.
+ */
+export function Card({ children, className = '', as: Tag = 'div', selected = false, ...rest }) {
   return (
-    <Tag className={`border border-slate-200 bg-white ${className}`} {...rest}>
+    <Tag
+      className={`border bg-white ${
+        selected ? 'border-brand-700 ring-1 ring-brand-700' : 'border-slate-200'
+      } ${className}`}
+      {...rest}
+    >
       {children}
     </Tag>
   );
@@ -46,18 +57,24 @@ export function Label({ children, className = '' }) {
 
 /* -------------------------------------------------------------------- figures */
 
-export function Stat({ label, value, unit, hint, emphasis = false }) {
+/**
+ * `size`: 'lg' is reserved for the one or two true headline figures on a page
+ * (e.g. the dashboard's allocated/demand ratio). Ordinary figures should keep
+ * using `emphasis` or the default — a page with several "lg" stats has no
+ * hierarchy left to show.
+ */
+export function Stat({ label, value, unit, hint, emphasis = false, size }) {
+  const valueSize =
+    size === 'lg'
+      ? 'text-4xl font-semibold'
+      : emphasis
+        ? 'text-2xl font-semibold'
+        : 'text-xl font-medium';
   return (
     <div className="min-w-0">
       <Label>{label}</Label>
       <div className="mt-1 flex items-baseline gap-1.5">
-        <span
-          className={`font-mono tabular-nums tracking-tight text-slate-900 ${
-            emphasis ? 'text-2xl font-semibold' : 'text-xl font-medium'
-          }`}
-        >
-          {value}
-        </span>
+        <span className={`font-mono tabular-nums tracking-tight text-slate-900 ${valueSize}`}>{value}</span>
         {unit && <span className="text-xs text-slate-500">{unit}</span>}
       </div>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
@@ -77,7 +94,49 @@ export function Meter({ value, tone = 'bg-slate-400', label }) {
       aria-label={label}
       className="h-1.5 w-full overflow-hidden bg-slate-100"
     >
-      <div className={`h-full ${tone}`} style={{ width: `${pct}%` }} />
+      <div className={`h-full transition-[width] duration-500 ease-out ${tone}`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/**
+ * The recurring "capacity" visual: percentage, a rail (built on Meter), and the
+ * used/available minute figures underneath. This is Vector Allocation's one
+ * visual language for capacity, reused on the dashboard hero, production-line
+ * panels and planning-week summaries so it reads the same everywhere.
+ *
+ * `size="lg"` is for the single dashboard hero rail; every other usage should
+ * stay at the default size.
+ */
+export function CapacityRail({ usedMinutes = 0, capacityMinutes = 0, label, size = 'md', tone = 'bg-brand-600' }) {
+  const used = Number(usedMinutes) || 0;
+  const capacity = Number(capacityMinutes) || 0;
+  const pct = capacity > 0 ? (used / capacity) * 100 : null;
+  const available = Math.max(0, capacity - used);
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        {label ? <Label>{label}</Label> : <span />}
+        <span
+          className={`font-mono tabular-nums text-slate-900 ${
+            size === 'lg' ? 'text-2xl font-semibold' : 'text-sm font-semibold'
+          }`}
+        >
+          {pct === null ? '—' : formatPercent(pct)}
+        </span>
+      </div>
+      <div className={size === 'lg' ? 'mt-2' : 'mt-1.5'}>
+        <Meter value={pct ?? 0} tone={pct === null ? 'bg-slate-300' : tone} label={label || 'Capacity utilisation'} />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
+        <span>
+          <span className="font-mono tabular-nums text-slate-700">{formatInt(used)}</span> min used
+        </span>
+        <span>
+          <span className="font-mono tabular-nums text-slate-700">{formatInt(available)}</span> min available
+        </span>
+      </div>
     </div>
   );
 }
@@ -114,7 +173,7 @@ export function Badge({ children, className = '' }) {
 /* -------------------------------------------------------------------- buttons */
 
 const BUTTON_VARIANTS = {
-  primary: 'bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-300',
+  primary: 'bg-brand-700 text-white hover:bg-brand-800 disabled:bg-slate-300',
   secondary:
     'bg-white text-slate-800 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:text-slate-300'
