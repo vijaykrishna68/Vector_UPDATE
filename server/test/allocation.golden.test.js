@@ -132,9 +132,15 @@ describe('golden master: synthetic workbook', () => {
 
   it('exercises every error type the engine can emit for a parsed workbook', () => {
     const snap = captureSnapshot();
+    // OVERLOAD joined this set with the Phase 6 BUG-1 fix. The fixture's demand
+    // (~35,980 minutes) genuinely exceeds the capacity of its 6 date columns
+    // (6 x 5,700 = 34,200 minutes). Previously each bucket was allocated against
+    // its own fresh capacity model, so the fixture appeared to fit; with one
+    // shared model the real over-subscription surfaces. The fixture is unchanged
+    // — its reported outcome is now honest.
     assert.deepEqual(
       Object.keys(snap.errorCountsByType).sort(),
-      ['DUPLICATE_MERGED', 'INVALID_INPUT', 'NO_CAPACITY'],
+      ['DUPLICATE_MERGED', 'INVALID_INPUT', 'NO_CAPACITY', 'OVERLOAD'],
       'fixture coverage guard — update intentionally if the fixture changes'
     );
   });

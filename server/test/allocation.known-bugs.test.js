@@ -13,9 +13,6 @@
  * Invert the assertion as part of the fix commit — do not delete the test.
  *
  * STILL PINNED (current behavior is the bug):
- *   BUG-1  all three weeks write into the same date columns and are summed
- *          — deliberately unfixed: the correct per-week offset is a planner
- *            decision. See PHASE-2-BUG-1-INVESTIGATION.md.
  *   BUG-8  OVERLOAD counts capacity on lines a part can never reach, over only
  *          the days the allocator happened to open
  *          — deliberately unfixed: the intended capacity basis is undefined.
@@ -24,6 +21,12 @@
  *   BUG-2  blank-line parts are now allocated via the default chain [1]
  *   BUG-3  the working-days sheet is identified by its own column header
  *   BUG-7  line totals now reconcile to SUM for every week
+ *
+ * FIXED IN PHASE 6 (tests below were inverted, not deleted):
+ *   BUG-1  BU/BV/BW now share one capacity model and one production-date
+ *          cursor. Confirmed business rule: they are demand buckets against a
+ *          single production calendar (total demand = BU + BV + BW), not three
+ *          independent production windows.
  * ============================================================================
  */
 
@@ -48,50 +51,198 @@ function run(spec) {
   return { workbook, engine, result };
 }
 
-describe('BUG-1: every week writes into the same date columns starting at CU', () => {
-  it('sums BU + BV + BW into a single date cell instead of separating weeks', () => {
+// FIXED in Phase 6. Inverted from the Phase 0 characterisation, which asserted
+// that all three buckets restarted at CU against three independent capacity
+// models. Confirmed business rule: BU/BV/BW are demand buckets against ONE
+// production calendar, processed in order, sharing capacity and a date cursor.
+describe('BUG-1 FIXED: BU/BV/BW share one capacity model and one date cursor', () => {
+  /** Minutes committed to each (day, line) across all three buckets. */
+  function minutesByDayLine(result) {
+    const perDay = {};
+    result.weeksResults.forEach((w) =>
+      w.parts.forEach((p) =>
+        p.allocations.forEach((a) => {
+          perDay[a.dayIndex] = perDay[a.dayIndex] || {};
+          perDay[a.dayIndex][a.lineUsed] =
+            (perDay[a.dayIndex][a.lineUsed] || 0) + a.qty * p.cycleTime;
+        })
+      )
+    );
+    return perDay;
+  }
+
+  it('still writes the combined total when capacity does not bind', () => {
+    // Total demand for the part is BU + BV + BW = 100. Line 1 at cycleTime 1
+    // holds 1425/day, so the whole total legitimately fits on the first date.
     const { workbook, result } = run({
       dateColumns: 6,
       parts: [{ spec: 'M', line: 1, cycleTime: 1, bu: 50, bv: 30, bw: 20, row: 10 }]
     });
-
     const sheet1 = workbook.Sheets[result.sheet1Name];
 
-    // Each week independently allocates day 0, and writeWeekAllocations
-    // accumulates (prev + qty) into the SAME cell.
-    assert.equal(readCell(sheet1, dateCellAddr(10, 0)), 100, 'CU10 = 50 + 30 + 20');
-
-    // The three weeks parsed distinct demand, proving the collision is in the writer.
-    assert.deepEqual(result.weeksResults.map((w) => w.SUM), [50, 30, 20]);
-
-    // Nothing was written to any later date column.
-    assert.equal(readCell(sheet1, dateCellAddr(10, 1)), undefined);
-    assert.equal(readCell(sheet1, dateCellAddr(10, 2)), undefined);
+    assert.equal(readCell(sheet1, dateCellAddr(10, 0)), 100, 'CU = 50 + 30 + 20');
+    assert.equal(readCell(sheet1, dateCellAddr(10, 1)), undefined, 'no spill needed');
+    assert.deepEqual(result.weeksResults.map((w) => w.SUM), [50, 30, 20], 'buckets stay distinct');
   });
 
-  it('gives every week a day index starting at 0, with no per-week offset', () => {
+  it('spreads across dates instead of overfilling one, when capacity binds', () => {
+    // 300 units at cycleTime 10 on line 1 = 3,000 minutes against 1,425/day.
+    // Previously all three buckets wrote 100 each to CU, committing 3,000
+    // minutes to a 1,425-minute day.
+    const { workbook, result } = run({
+      dateColumns: 6,
+      parts: [{ spec: 'C', line: 1, cycleTime: 10, bu: 100, bv: 100, bw: 100, row: 10 }]
+    });
+    const sheet1 = workbook.Sheets[result.sheet1Name];
+
+    assert.equal(readCell(sheet1, dateCellAddr(10, 0)), 142, 'CU filled to capacity');
+    assert.equal(readCell(sheet1, dateCellAddr(10, 1)), 142, 'CV takes the overflow');
+
+    const perDay = minutesByDayLine(result);
+    Object.keys(perDay).forEach((d) => {
+      assert.ok(perDay[d][1] <= 1425, `day ${d} within line-1 capacity`);
+    });
+  });
+
+  it('BU fits entirely in the first available date when capacity allows', () => {
     const { result } = run({
-      dateColumns: 6,
-      parts: [{ spec: 'M', line: 1, cycleTime: 1, bu: 50, bv: 30, bw: 20, row: 10 }]
+      dateColumns: 5,
+      parts: [{ spec: 'A', line: 1, cycleTime: 10, bu: 100, bv: 0, bw: 0, row: 10 }]
     });
-    result.weeksResults.forEach((w) => {
-      const days = [...new Set(w.parts.flatMap((p) => p.allocations.map((a) => a.dayIndex)))];
-      assert.deepEqual(days, [0], `week ${w.weekColumn} starts at day 0`);
+    const bu = findPart(result.weeksResults[0], 'A');
+    assert.deepEqual(bu.allocations, [{ dayIndex: 0, qty: 100, lineUsed: 1 }]);
+    assert.equal(bu.remainingQty, 0);
+  });
+
+  it('BU spans multiple dates when it exceeds one day of capacity', () => {
+    // 400 units at 142/day -> 142 + 142 + 116
+    const { workbook, result } = run({
+      dateColumns: 6,
+      parts: [{ spec: 'B', line: 1, cycleTime: 10, bu: 400, bv: 0, bw: 0, row: 10 }]
+    });
+    const bu = findPart(result.weeksResults[0], 'B');
+    assert.deepEqual(bu.allocations, [
+      { dayIndex: 0, qty: 142, lineUsed: 1 },
+      { dayIndex: 1, qty: 142, lineUsed: 1 },
+      { dayIndex: 2, qty: 116, lineUsed: 1 }
+    ]);
+    assert.equal(bu.remainingQty, 0);
+
+    const sheet1 = workbook.Sheets[result.sheet1Name];
+    assert.equal(readCell(sheet1, dateCellAddr(10, 0)), 142);
+    assert.equal(readCell(sheet1, dateCellAddr(10, 2)), 116);
+  });
+
+  it('BU spills past its own working-day window into later production dates', () => {
+    // 500 units -> actualWorkingDays = 1, but one day holds only 142.
+    // The tolerance-driven extension carries the rest onto days 1..3.
+    const { result } = run({
+      dateColumns: 8,
+      parts: [{ spec: 'D', line: 1, cycleTime: 10, bu: 500, bv: 0, bw: 0, row: 10 }]
+    });
+    const week = result.weeksResults[0];
+    assert.equal(week.actualWorkingDays, 1, 'planned window is a single day');
+
+    const bu = findPart(week, 'D');
+    const days = bu.allocations.map((a) => a.dayIndex);
+    assert.deepEqual(days, [0, 1, 2, 3], 'spilled well beyond the planned window');
+    assert.equal(bu.remainingQty, 0, 'and nothing was stranded');
+  });
+
+  it('BV continues from the date and capacity state BU left behind', () => {
+    const { result } = run({
+      dateColumns: 8,
+      parts: [{ spec: 'C', line: 1, cycleTime: 10, bu: 200, bv: 200, bw: 200, row: 10 }]
+    });
+    const bu = findPart(result.weeksResults[0], 'C');
+    const bv = findPart(result.weeksResults[1], 'C');
+
+    // BU ends part-way through day 1 (142 + 58).
+    assert.deepEqual(bu.allocations, [
+      { dayIndex: 0, qty: 142, lineUsed: 1 },
+      { dayIndex: 1, qty: 58, lineUsed: 1 }
+    ]);
+    // BV resumes ON day 1, consuming exactly its leftover (142 - 58 = 84).
+    assert.equal(bv.allocations[0].dayIndex, 1, 'BV resumes on the day BU stopped');
+    assert.equal(bv.allocations[0].qty, 84, 'and takes only the remaining capacity');
+    assert.equal(bv.allocations[1].dayIndex, 2, 'then moves to the next date');
+  });
+
+  it('BW continues from the state left by BU and BV combined', () => {
+    const { result } = run({
+      dateColumns: 8,
+      parts: [{ spec: 'C', line: 1, cycleTime: 10, bu: 200, bv: 200, bw: 200, row: 10 }]
+    });
+    const bv = findPart(result.weeksResults[1], 'C');
+    const bw = findPart(result.weeksResults[2], 'C');
+
+    const bvLastDay = bv.allocations[bv.allocations.length - 1].dayIndex;
+    assert.equal(bw.allocations[0].dayIndex, bvLastDay, 'BW resumes where BV stopped');
+    assert.equal(bw.allocations[0].qty, 26, 'consuming day 2 leftover (142 - 116)');
+    assert.deepEqual(bw.allocations.map((a) => a.dayIndex), [2, 3, 4]);
+  });
+
+  it('never commits more production to a date than that date can hold', () => {
+    const { result } = run({
+      dateColumns: 10,
+      parts: [
+        { spec: 'L1', line: 1, cycleTime: 10, bu: 400, bv: 300, bw: 200, row: 10 },
+        { spec: 'L2', line: 2, cycleTime: 8, bu: 500, bv: 400, bw: 300, row: 11 },
+        { spec: 'L3', line: 3, cycleTime: 6, bu: 300, bv: 200, bw: 100, row: 12 },
+        { spec: 'L4', line: 4, cycleTime: 12, bu: 200, bv: 150, bw: 100, row: 13 }
+      ]
+    });
+
+    const capacity = { 1: 1425, 2: 1900, 3: 950, 4: 1425 };
+    const perDay = minutesByDayLine(result);
+
+    Object.keys(perDay).forEach((day) => {
+      [1, 2, 3, 4].forEach((line) => {
+        const used = perDay[day][line] || 0;
+        assert.ok(
+          used <= capacity[line] + 1e-6,
+          `day ${day} line ${line}: ${used} minutes exceeds capacity ${capacity[line]}`
+        );
+      });
+      const total = [1, 2, 3, 4].reduce((s, l) => s + (perDay[day][l] || 0), 0);
+      assert.ok(total <= 5700 + 1e-6, `day ${day}: ${total} minutes exceeds factory capacity`);
     });
   });
 
-  it('overlaps weeks across multiple days when demand spans several days', () => {
-    // BU needs 2 days on line 1 (1425/day at cycleTime 1); BV needs 1 day.
-    const { workbook, result } = run({
-      dateColumns: 8,
-      parts: [{ spec: 'W', line: 1, cycleTime: 1, bu: 2000, bv: 500, bw: 0, row: 10 }]
+  it('conserves quantity: allocated + remaining equals total demand', () => {
+    const { result } = run({
+      dateColumns: 10,
+      parts: [
+        { spec: 'L1', line: 1, cycleTime: 10, bu: 400, bv: 300, bw: 200, row: 10 },
+        { spec: 'L2', line: 2, cycleTime: 8, bu: 500, bv: 400, bw: 300, row: 11 },
+        { spec: 'NOLINE', line: null, cycleTime: 5, bu: 120, bv: 80, bw: 60, row: 12 }
+      ]
     });
-    const sheet1 = workbook.Sheets[result.sheet1Name];
 
-    // Day 0 holds BU's first 1425 plus all 500 of BV.
-    assert.equal(readCell(sheet1, dateCellAddr(10, 0)), 1925);
-    // Day 1 holds only BU's remainder.
-    assert.equal(readCell(sheet1, dateCellAddr(10, 1)), 575);
+    let demand = 0;
+    let allocated = 0;
+    let remaining = 0;
+    result.weeksResults.forEach((w) => {
+      demand += w.SUM;
+      w.parts.forEach((p) => {
+        allocated += p.allocations.reduce((s, a) => s + a.qty, 0);
+        remaining += p.remainingQty;
+      });
+    });
+
+    assert.equal(allocated + remaining, demand, 'no quantity created or lost');
+    assert.equal(demand, 400 + 300 + 200 + 500 + 400 + 300 + 120 + 80 + 60);
+  });
+
+  it('keeps the three buckets separately reported', () => {
+    // Option B preserves week/bucket reporting semantics; the API, DB and UI all
+    // depend on weeksResults staying a three-element BU/BV/BW structure.
+    const { result } = run({
+      dateColumns: 8,
+      parts: [{ spec: 'C', line: 1, cycleTime: 10, bu: 200, bv: 150, bw: 100, row: 10 }]
+    });
+    assert.deepEqual(result.weeksResults.map((w) => w.weekColumn), ['BU', 'BV', 'BW']);
+    assert.deepEqual(result.weeksResults.map((w) => w.SUM), [200, 150, 100]);
   });
 });
 

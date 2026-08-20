@@ -6,7 +6,8 @@
   "errorCountsByType": {
     "DUPLICATE_MERGED": 3,
     "INVALID_INPUT": 3,
-    "NO_CAPACITY": 2
+    "NO_CAPACITY": 8,
+    "OVERLOAD": 2
   },
   "errors": [
     {
@@ -46,6 +47,30 @@
       "week": "BV"
     },
     {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-L4-A\" (remaining=173)",
+      "spec": "SPEC-L4-A",
+      "type": "NO_CAPACITY",
+      "week": "BV"
+    },
+    {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-NOLINE\" (remaining=75)",
+      "spec": "SPEC-NOLINE",
+      "type": "NO_CAPACITY",
+      "week": "BV"
+    },
+    {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-DUP\" (remaining=75)",
+      "spec": "SPEC-DUP",
+      "type": "NO_CAPACITY",
+      "week": "BV"
+    },
+    {
+      "message": "Total demand exceeds total capacity by 3126 minutes for week BV",
+      "overloadMinutes": 3126,
+      "type": "OVERLOAD",
+      "week": "BV"
+    },
+    {
       "message": "Merged duplicate (spec + week) for \"SPEC-DUP\". Kept cycleTime=6, ignored cycleTime=9 from row 17",
       "spec": "SPEC-DUP",
       "type": "DUPLICATE_MERGED",
@@ -55,6 +80,30 @@
       "message": "Invalid cycleTime (<= 0) for spec \"SPEC-BADCT\" at row 18",
       "spec": "SPEC-BADCT",
       "type": "INVALID_INPUT",
+      "week": "BW"
+    },
+    {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-L2-A\" (remaining=150)",
+      "spec": "SPEC-L2-A",
+      "type": "NO_CAPACITY",
+      "week": "BW"
+    },
+    {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-L2-B\" (remaining=60)",
+      "spec": "SPEC-L2-B",
+      "type": "NO_CAPACITY",
+      "week": "BW"
+    },
+    {
+      "message": "Remaining quantity could not be allocated for spec \"SPEC-L1-A\" (remaining=90)",
+      "spec": "SPEC-L1-A",
+      "type": "NO_CAPACITY",
+      "week": "BW"
+    },
+    {
+      "message": "Total demand exceeds total capacity by 2190 minutes for week BW",
+      "overloadMinutes": 2190,
+      "type": "OVERLOAD",
       "week": "BW"
     }
   ],
@@ -449,26 +498,26 @@
         "DAY-5",
         "DAY-6"
       ],
-      "daysOpened": 2,
+      "daysOpened": 6,
       "lineDayMinutes": [
         {
           "dayIndex": 0,
           "lines": {
             "1": {
-              "remaining": 1,
-              "used": 1424
+              "remaining": 0,
+              "used": 0
             },
             "2": {
               "remaining": 0,
-              "used": 1900
+              "used": 0
             },
             "3": {
-              "remaining": 110,
-              "used": 840
+              "remaining": 0,
+              "used": 0
             },
             "4": {
-              "remaining": 1,
-              "used": 1424
+              "remaining": 0,
+              "used": 0
             }
           }
         },
@@ -476,28 +525,112 @@
           "dayIndex": 1,
           "lines": {
             "1": {
-              "remaining": 383,
-              "used": 1042
+              "remaining": 0,
+              "used": 0
             },
             "2": {
-              "remaining": 1900,
+              "remaining": 0,
               "used": 0
             },
             "3": {
-              "remaining": 950,
+              "remaining": 0,
               "used": 0
             },
             "4": {
-              "remaining": 765,
-              "used": 660
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 2,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 3,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 4,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 5,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 1900
+            },
+            "3": {
+              "remaining": 0,
+              "used": 840
+            },
+            "4": {
+              "remaining": 0,
+              "used": 1424
             }
           }
         }
       ],
       "lineTotals": {
         "1": {
-          "allocated": 150,
-          "remaining": 0
+          "allocated": 0,
+          "remaining": 150
         },
         "2": {
           "allocated": 300,
@@ -508,8 +641,8 @@
           "remaining": 0
         },
         "4": {
-          "allocated": 200,
-          "remaining": 0
+          "allocated": 27,
+          "remaining": 173
         }
       },
       "parts": [
@@ -517,7 +650,7 @@
           "allocated": 120,
           "allocations": [
             {
-              "dayIndex": 0,
+              "dayIndex": 5,
               "lineUsed": 3,
               "qty": 120
             }
@@ -533,12 +666,12 @@
           "allocated": 300,
           "allocations": [
             {
-              "dayIndex": 0,
+              "dayIndex": 5,
               "lineUsed": 2,
               "qty": 190
             },
             {
-              "dayIndex": 0,
+              "dayIndex": 5,
               "lineUsed": 4,
               "qty": 110
             }
@@ -561,27 +694,17 @@
           "weeklyQty": 0
         },
         {
-          "allocated": 200,
+          "allocated": 27,
           "allocations": [
             {
-              "dayIndex": 0,
+              "dayIndex": 5,
               "lineUsed": 4,
               "qty": 27
-            },
-            {
-              "dayIndex": 0,
-              "lineUsed": 1,
-              "qty": 118
-            },
-            {
-              "dayIndex": 1,
-              "lineUsed": 4,
-              "qty": 55
             }
           ],
           "cycleTime": 12,
           "originalLine": 4,
-          "remainingQty": 0,
+          "remainingQty": 173,
           "rowIndex": 12,
           "spec": "SPEC-L4-A",
           "weeklyQty": 200
@@ -597,38 +720,21 @@
           "weeklyQty": 0
         },
         {
-          "allocated": 75,
-          "allocations": [
-            {
-              "dayIndex": 0,
-              "lineUsed": 1,
-              "qty": 1
-            },
-            {
-              "dayIndex": 1,
-              "lineUsed": 1,
-              "qty": 74
-            }
-          ],
+          "allocated": 0,
+          "allocations": [],
           "cycleTime": 8,
           "originalLine": null,
-          "remainingQty": 0,
+          "remainingQty": 75,
           "rowIndex": 14,
           "spec": "SPEC-NOLINE",
           "weeklyQty": 75
         },
         {
-          "allocated": 75,
-          "allocations": [
-            {
-              "dayIndex": 1,
-              "lineUsed": 1,
-              "qty": 75
-            }
-          ],
+          "allocated": 0,
+          "allocations": [],
           "cycleTime": 6,
           "originalLine": 1,
-          "remainingQty": 0,
+          "remainingQty": 75,
           "rowIndex": 15,
           "spec": "SPEC-DUP",
           "weeklyQty": 75
@@ -645,8 +751,8 @@
         }
       ],
       "totals": {
-        "allocated": 770,
-        "remaining": 0
+        "allocated": 447,
+        "remaining": 323
       },
       "weekColumn": "BV"
     },
@@ -662,25 +768,130 @@
         "DAY-5",
         "DAY-6"
       ],
-      "daysOpened": 1,
+      "daysOpened": 6,
       "lineDayMinutes": [
         {
           "dayIndex": 0,
           "lines": {
             "1": {
-              "remaining": 975,
-              "used": 450
+              "remaining": 0,
+              "used": 0
             },
             "2": {
-              "remaining": 160,
-              "used": 1740
+              "remaining": 0,
+              "used": 0
             },
             "3": {
-              "remaining": 950,
+              "remaining": 0,
               "used": 0
             },
             "4": {
-              "remaining": 1425,
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 1,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 2,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 3,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 4,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
+              "used": 0
+            }
+          }
+        },
+        {
+          "dayIndex": 5,
+          "lines": {
+            "1": {
+              "remaining": 0,
+              "used": 0
+            },
+            "2": {
+              "remaining": 0,
+              "used": 0
+            },
+            "3": {
+              "remaining": 0,
+              "used": 0
+            },
+            "4": {
+              "remaining": 0,
               "used": 0
             }
           }
@@ -688,12 +899,12 @@
       ],
       "lineTotals": {
         "1": {
-          "allocated": 90,
-          "remaining": 0
+          "allocated": 0,
+          "remaining": 90
         },
         "2": {
-          "allocated": 210,
-          "remaining": 0
+          "allocated": 0,
+          "remaining": 210
         },
         "3": {
           "allocated": 0,
@@ -716,33 +927,21 @@
           "weeklyQty": 0
         },
         {
-          "allocated": 150,
-          "allocations": [
-            {
-              "dayIndex": 0,
-              "lineUsed": 2,
-              "qty": 150
-            }
-          ],
+          "allocated": 0,
+          "allocations": [],
           "cycleTime": 10,
           "originalLine": 2,
-          "remainingQty": 0,
+          "remainingQty": 150,
           "rowIndex": 10,
           "spec": "SPEC-L2-A",
           "weeklyQty": 150
         },
         {
-          "allocated": 60,
-          "allocations": [
-            {
-              "dayIndex": 0,
-              "lineUsed": 2,
-              "qty": 60
-            }
-          ],
+          "allocated": 0,
+          "allocations": [],
           "cycleTime": 4,
           "originalLine": 2,
-          "remainingQty": 0,
+          "remainingQty": 60,
           "rowIndex": 11,
           "spec": "SPEC-L2-B",
           "weeklyQty": 60
@@ -758,17 +957,11 @@
           "weeklyQty": 0
         },
         {
-          "allocated": 90,
-          "allocations": [
-            {
-              "dayIndex": 0,
-              "lineUsed": 1,
-              "qty": 90
-            }
-          ],
+          "allocated": 0,
+          "allocations": [],
           "cycleTime": 5,
           "originalLine": 1,
-          "remainingQty": 0,
+          "remainingQty": 90,
           "rowIndex": 13,
           "spec": "SPEC-L1-A",
           "weeklyQty": 90
@@ -805,28 +998,25 @@
         }
       ],
       "totals": {
-        "allocated": 300,
-        "remaining": 0
+        "allocated": 0,
+        "remaining": 300
       },
       "weekColumn": "BW"
     }
   ],
   "workbookOutput": {
     "dateCells": {
-      "CU10": 255,
-      "CU11": 782,
-      "CU12": 61,
-      "CU13": 263,
-      "CU14": 91,
-      "CU15": 1,
+      "CU10": 135,
+      "CU11": 332,
+      "CU12": 1,
+      "CU13": 118,
+      "CU14": 1,
       "CU3": "DAY-1",
       "CV10": 135,
       "CV11": 332,
       "CV12": 1,
-      "CV13": 173,
+      "CV13": 118,
       "CV14": 1,
-      "CV15": 74,
-      "CV16": 75,
       "CV3": "DAY-2",
       "CW10": 130,
       "CW11": 236,
@@ -840,6 +1030,9 @@
       "CX3": "DAY-4",
       "CY14": 285,
       "CY3": "DAY-5",
+      "CZ10": 120,
+      "CZ11": 300,
+      "CZ13": 27,
       "CZ14": 195,
       "CZ15": 56,
       "CZ3": "DAY-6"

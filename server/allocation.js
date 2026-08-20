@@ -296,8 +296,30 @@ class AllocationEngine {
     }
   }
 
-  // Allocate for one week
-  allocateWeek(parts, dateCols, actualWorkingDays) {
+  /**
+   * Allocate one demand bucket (BU, BV or BW) against SHARED scheduling state.
+   *
+   * BUG-1 fix. BU/BV/BW are demand buckets, not separate production windows: the
+   * planner confirmed that total demand for a part is BU + BV + BW, spread across
+   * the production dates from CU onward. Previously each bucket was allocated as
+   * an independent problem with its own capacity model starting at day 0, so the
+   * same physical day could be filled three times over and every bucket wrote
+   * from CU. On a capacity-bound example that produced 3,000 minutes of work on a
+   * 1,425-minute day.
+   *
+   * Now all three buckets share one capacity model and one date cursor:
+   *   - `shared.lineDayMinutes` is created once per run and never reset. A day is
+   *     initialised the first time any bucket reaches it.
+   *   - `shared.startDay` is where this bucket begins. It is the last day the
+   *     previous bucket touched, so this bucket first consumes that day's
+   *     leftover capacity and then flows forward into later dates.
+   *
+   * Line priority, fallback chains, capacity constants, the tolerance-driven
+   * extension and the working-day formula are all unchanged.
+   *
+   * @param {object} shared { lineDayMinutes: [], startDay: number }
+   */
+  allocateWeek(parts, dateCols, actualWorkingDays, shared) {
     // Group weekly totals by original line.
     //
     // A part whose column D is blank or non-numeric has originalLine === null.
@@ -333,16 +355,42 @@ class AllocationEngine {
     const maxDaysAvailable = dateCols.length;
     const dailyCapacityTemplate = { 1: this.LINE_CAPACITY[1], 2: this.LINE_CAPACITY[2], 3: this.LINE_CAPACITY[3], 4: this.LINE_CAPACITY[4] };
 
-    // Track line minute usage per day
-    const lineDayMinutes = [];// index day -> { line -> { used, remaining } }
+    // SHARED across BU/BV/BW — never reset between buckets.
+    const state = shared || { lineDayMinutes: [], startDay: 0 };
+    const lineDayMinutes = state.lineDayMinutes; // index day -> { line -> { used, remaining } }
+    const startDay = Math.max(0, Number(state.startDay) || 0);
 
-    // Allocation pass
-    for (let dayIdx = 0; dayIdx < Math.min(daysToUse, maxDaysAvailable); dayIdx++) {
-      lineDayMinutes[dayIdx] = {};
-      [1,2,3,4].forEach(l => lineDayMinutes[dayIdx][l] = {
-        used: 0,
-        remaining: dailyCapacityTemplate[l]
-      });
+    // A day is opened once, by whichever bucket reaches it first.
+    const openedHere = new Set();
+    const openDay = (dayIdx) => {
+      if (!lineDayMinutes[dayIdx]) {
+        lineDayMinutes[dayIdx] = {};
+        [1, 2, 3, 4].forEach(l => lineDayMinutes[dayIdx][l] = {
+          used: 0,
+          remaining: dailyCapacityTemplate[l]
+        });
+        openedHere.add(dayIdx);
+      }
+      return lineDayMinutes[dayIdx];
+    };
+
+    // This bucket's own consumption, so per-bucket reporting stays meaningful
+    // even though the underlying capacity model is shared.
+    const bucketMinutes = [];
+    const recordBucketUse = (dayIdx, line, minutes) => {
+      if (!bucketMinutes[dayIdx]) {
+        bucketMinutes[dayIdx] = {};
+        [1, 2, 3, 4].forEach(l => bucketMinutes[dayIdx][l] = { used: 0, remaining: 0 });
+      }
+      bucketMinutes[dayIdx][line].used += minutes;
+    };
+
+    let lastDayTouched = startDay;
+
+    // Allocation pass — window begins at the shared cursor.
+    const mainEnd = Math.min(startDay + daysToUse, maxDaysAvailable);
+    for (let dayIdx = startDay; dayIdx < mainEnd; dayIdx++) {
+      openDay(dayIdx);
 
       // Line priority order 3 -> 2 -> 4 -> 1
       for (const priorityLine of [3,2,4,1]) {
@@ -378,6 +426,8 @@ class AllocationEngine {
               allocatedThisLineToday += allocQty; // counts toward original line's daily target
               qtyToAllocate -= allocQty;
               part.allocations.push({ dayIndex: dayIdx, qty: allocQty, lineUsed: lineCandidate });
+              recordBucketUse(dayIdx, lineCandidate, minutesUsed);
+              if (dayIdx > lastDayTouched) lastDayTouched = dayIdx;
             }
           }
         }
@@ -391,10 +441,10 @@ class AllocationEngine {
     });
     const needExtension = [1,2,3,4].some(l => leftoverTotals[l] > this.TOLERANCE);
     if (needExtension) {
-      for (let dayIdx = daysToUse; dayIdx < maxDaysAvailable; dayIdx++) {
+      // Extension continues past this bucket's own window, still on shared state.
+      for (let dayIdx = mainEnd; dayIdx < maxDaysAvailable; dayIdx++) {
         let anyAllocated = false;
-        lineDayMinutes[dayIdx] = {};
-        [1,2,3,4].forEach(l => lineDayMinutes[dayIdx][l] = { used: 0, remaining: dailyCapacityTemplate[l] });
+        openDay(dayIdx);
         for (const priorityLine of [3,2,4,1]) {
           const groupParts = lineGroups[priorityLine];
           if (!groupParts) continue;
@@ -416,6 +466,8 @@ class AllocationEngine {
                 part.remainingQty -= allocQty;
                 qtyToAllocate -= allocQty;
                 part.allocations.push({ dayIndex: dayIdx, qty: allocQty, lineUsed: lineCandidate });
+                recordBucketUse(dayIdx, lineCandidate, minutesUsed);
+                if (dayIdx > lastDayTouched) lastDayTouched = dayIdx;
                 anyAllocated = true;
               }
             }
@@ -430,7 +482,44 @@ class AllocationEngine {
       }
     }
 
-    return { parts, lineDayMinutes, dateCols };
+    // Advance the shared cursor to the last day this bucket touched. The next
+    // bucket resumes ON that day so it consumes the leftover capacity there
+    // before moving forward.
+    state.startDay = lastDayTouched;
+
+    /*
+     * Per-bucket view of the shared model.
+     *
+     * `used` is this bucket's own consumption, so summing usedMinutes across
+     * BU/BV/BW gives the run's true total. A day's spare capacity is attributed
+     * once, to whichever bucket opened that day; later buckets report 0 there.
+     * Summed across buckets a day therefore reconciles to exactly its capacity:
+     *
+     *   opener: used_a + (capacity - totalUsed)
+     *   others: used_b + 0, used_c + 0
+     *   total : capacity
+     *
+     * Without this, three buckets sharing one model would each report the whole
+     * cumulative figure and the dashboard would treble-count capacity.
+     */
+    const reported = [];
+    for (let dayIdx = 0; dayIdx <= lastDayTouched; dayIdx++) {
+      const mine = bucketMinutes[dayIdx];
+      const openedByThisBucket = openedHere.has(dayIdx);
+      if (!mine && !openedByThisBucket) {
+        reported[dayIdx] = { 1: { used: 0, remaining: 0 }, 2: { used: 0, remaining: 0 }, 3: { used: 0, remaining: 0 }, 4: { used: 0, remaining: 0 } };
+        continue;
+      }
+      reported[dayIdx] = {};
+      [1, 2, 3, 4].forEach((l) => {
+        reported[dayIdx][l] = {
+          used: mine ? mine[l].used : 0,
+          remaining: openedByThisBucket ? lineDayMinutes[dayIdx][l].remaining : 0
+        };
+      });
+    }
+
+    return { parts, lineDayMinutes: reported, sharedLineDayMinutes: lineDayMinutes, dateCols };
   }
 
   writeActualWorkingDays(sheet3, weekIndex, value) {
@@ -498,6 +587,12 @@ class AllocationEngine {
     // rows that already exist, so the row bound stays valid across passes.
     const sheet1Extent = getPopulatedExtent(sheet1);
 
+    // BUG-1 fix: one capacity model and one date cursor for the whole run.
+    // BU, BV and BW are demand buckets against the same production calendar, so
+    // capacity is never reset between them and each bucket resumes where the
+    // previous one left off.
+    const schedule = { lineDayMinutes: [], startDay: 0 };
+
     const weeksResults = [];
     this.WEEK_COLUMNS.forEach((wk, wkIdx) => {
       const parts = this.parseWeekParts(sheet1, wk.letter, errors, sheet1Extent);
@@ -507,7 +602,7 @@ class AllocationEngine {
       this.writeActualWorkingDays(sheet3, wkIdx, actualWorkingDays);
       let allocation = null;
       if (SUM > 0) {
-        allocation = this.allocateWeek(parts, dateCols, actualWorkingDays);
+        allocation = this.allocateWeek(parts, dateCols, actualWorkingDays, schedule);
         this.writeWeekAllocations(sheet1, allocation.parts, dateCols, actualWorkingDays);
 
         // NO_CAPACITY: any remaining quantity after allocation.
