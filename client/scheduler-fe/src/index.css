@@ -1,1 +1,29 @@
 @import "tailwindcss";
+
+/*
+ * Base layer only. All component styling lives in components/ui.jsx so the
+ * visual system has one home rather than being spread across ad-hoc classes.
+ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    /* System UI stack: this is a dense internal tool, not a branded site. */
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "cv11";
+  }
+
+  /* Figures are compared column-to-column, so digits must not shift width. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tables in this app are dense by design. */
+  table {
+    border-spacing: 0;
+  }
+}

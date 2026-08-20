@@ -9,6 +9,36 @@ function colLetterToIndex(letter) {
   return col - 1; // zero-based
 }
 
+// Helper: actual populated extent of a sheet, derived from its cell keys.
+//
+// PERF: planner workbooks routinely declare a '!ref' spanning the entire
+// 1,048,576-row sheet (observed: "A2:DS1048576" while real data ends at row
+// 1434). Serialising that declared range makes XLSX.write() walk ~1M empty
+// rows, measured at 67s versus 0.47s for the true extent. Parsing pays the
+// same cost. Returns null when the sheet holds no cells.
+function getPopulatedExtent(sheet) {
+  let minR = Infinity;
+  let minC = Infinity;
+  let maxR = -1;
+  let maxC = -1;
+
+  // Object.keys rather than for..in: own enumerable keys only, so a polluted
+  // Object.prototype cannot inject a phantom "cell" (xlsx@0.18.5 carries a known
+  // prototype-pollution advisory).
+  for (const key of Object.keys(sheet)) {
+    if (key.charCodeAt(0) === 33) continue; // skip '!ref', '!merges', ... metadata
+    const cell = XLSX.utils.decode_cell(key);
+    if (!Number.isFinite(cell.r) || !Number.isFinite(cell.c)) continue;
+    if (cell.r < minR) minR = cell.r;
+    if (cell.c < minC) minC = cell.c;
+    if (cell.r > maxR) maxR = cell.r;
+    if (cell.c > maxC) maxC = cell.c;
+  }
+
+  if (maxR < 0) return null;
+  return { minR, minC, maxR, maxC };
+}
+
 // Helper: sequence of date columns starting at CU until blank
 function collectDateColumns(sheet) {
   const startIdx = colLetterToIndex('CU');
@@ -24,8 +54,37 @@ function collectDateColumns(sheet) {
   return dateCols;
 }
 
+// The working-days sheet identifies itself: column I of its header row carries
+// this label, with the three week rows immediately beneath it (Excel rows 4/5/6,
+// matching WEEK_COLUMNS.rowActualDays).
+//
+// Verified against every distinct workbook in uploads/: the label appears in
+// column I row 3 of exactly ONE sheet per workbook —
+//   "JUNE SUMMARY " (30-sheet production workbooks)
+//   "SHEET 3"       (4-sheet prototype workbook, the one algorithm.txt describes)
+// and in that sheet I4/I5/I6 already hold per-week working days.
+const WORKING_DAYS_HEADER = 'Working Days As Per Plan';
+const WORKING_DAYS_HEADER_ROW = 2; // zero-based -> Excel row 3
+const WORKING_DAYS_COLUMN = 'I';
+
+function normaliseLabel(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 class AllocationEngine {
-  constructor() {
+  /**
+   * @param {object} [options]
+   * @param {string} [options.workingDaysSheetName] Explicit sheet name for the
+   *   working-days summary. Overrides label-based identification; use it when a
+   *   workbook does not carry the standard header. Also settable via the
+   *   WORKING_DAYS_SHEET environment variable.
+   */
+  constructor(options = {}) {
+    this.workingDaysSheetName =
+      options.workingDaysSheetName || process.env.WORKING_DAYS_SHEET || null;
     this.MINUTES_PER_PERSON = 475;
     this.LINE_CAPACITY = { 1: 3 * 475, 2: 4 * 475, 3: 2 * 475, 4: 3 * 475 };
     this.WEEK_COLUMNS = [
@@ -59,27 +118,75 @@ class AllocationEngine {
     return workbook.SheetNames[0];
   }
 
-  // Detect sheet3 (actual working days summary) by presence of I4/I5/I6
+  /**
+   * Identify the working-days summary sheet.
+   *
+   * Previously this returned the first non-Sheet1 sheet containing ANY of
+   * I4/I5/I6. In the production workbook 17 sheets satisfy that, so it selected
+   * "AXLE JUNE MPS" — a pivot-table output area — and silently overwrote three
+   * of the planner's cells on every run.
+   *
+   * It now identifies the sheet by the workbook's own column header (see
+   * WORKING_DAYS_HEADER), or by an explicitly configured sheet name. If the
+   * sheet cannot be identified unambiguously it THROWS rather than guessing:
+   * writing to the wrong sheet destroys planner data, so refusing to run is
+   * strictly safer than picking a candidate.
+   */
   detectSheet3(workbook, sheet1Name) {
-    for (const name of workbook.SheetNames) {
-      if (name === sheet1Name) continue;
-      const sheet = workbook.Sheets[name];
-      if (sheet['I4'] || sheet['I5'] || sheet['I6']) return name;
+    const names = workbook.SheetNames || [];
+
+    // 1. Explicit configuration always wins.
+    if (this.workingDaysSheetName) {
+      if (!workbook.Sheets[this.workingDaysSheetName]) {
+        throw new Error(
+          `Configured working-days sheet "${this.workingDaysSheetName}" was not found in the workbook`
+        );
+      }
+      return this.workingDaysSheetName;
     }
-    return workbook.SheetNames.find(n => n !== sheet1Name) || sheet1Name;
+
+    // 2. Identify by the header label the workbook itself declares.
+    const headerAddr = `${WORKING_DAYS_COLUMN}${WORKING_DAYS_HEADER_ROW + 1}`;
+    const target = normaliseLabel(WORKING_DAYS_HEADER);
+    const matches = names.filter((name) => {
+      const sheet = workbook.Sheets[name];
+      if (!sheet) return false;
+      const cell = sheet[headerAddr];
+      return cell && normaliseLabel(cell.v) === target;
+    });
+
+    if (matches.length === 1) return matches[0];
+
+    if (matches.length > 1) {
+      throw new Error(
+        `Ambiguous working-days sheet: ${matches.length} sheets declare "${WORKING_DAYS_HEADER}" ` +
+        `in ${headerAddr} (${matches.join(', ')}). Set WORKING_DAYS_SHEET to choose one.`
+      );
+    }
+
+    throw new Error(
+      `Could not identify the working-days sheet: no sheet declares "${WORKING_DAYS_HEADER}" in ${headerAddr}. ` +
+      `Set WORKING_DAYS_SHEET to name it explicitly.`
+    );
   }
 
   // Parse parts for a given week column (BU/BV/BW)
   // Includes basic input validation and merges duplicates by (spec + week).
-  parseWeekParts(sheet1, weekLetter, errors) {
+  parseWeekParts(sheet1, weekLetter, errors, extent) {
     const range = XLSX.utils.decode_range(sheet1['!ref']);
+    // PERF: stop at the last row that actually holds a cell. Rows beyond the
+    // populated extent contain no column J, so the 'PC' filter already skipped
+    // them — this changes only how many empty rows we walk, never which rows
+    // are parsed.
+    const populated = extent === undefined ? getPopulatedExtent(sheet1) : extent;
+    const lastRow = populated ? Math.min(range.e.r, populated.maxR) : range.e.r;
     const weekColIdx = colLetterToIndex(weekLetter);
     const specColIdx = colLetterToIndex('B');
     const lineColIdx = colLetterToIndex('D');
     const cycleColIdx = colLetterToIndex('H');
     const compUnitColIdx = colLetterToIndex('J');
     const partsByKey = new Map();
-    for (let r = 0; r <= range.e.r; r++) {
+    for (let r = 0; r <= lastRow; r++) {
       // Component Unit filter (Column J == 'PC')
       const compAddr = XLSX.utils.encode_cell({ r, c: compUnitColIdx });
       const compCell = sheet1[compAddr];
@@ -162,6 +269,22 @@ class AllocationEngine {
     return { SUM, CountOfParts };
   }
 
+  /**
+   * Which line a part is attributed to — the SINGLE source of truth used by both
+   * allocation and reporting.
+   *
+   * A part with a usable line (1-4) keeps it. Anything else (blank column D, or
+   * a non-numeric value such as "ALL") takes the first line of its fallback
+   * chain. Allocation and aggregation previously disagreed here: allocateWeek
+   * dropped such parts, buildLineTotals omitted them, and the API layer mapped
+   * them to line 1, so the three views reported different totals.
+   */
+  resolveGroupLine(originalLine) {
+    return Object.prototype.hasOwnProperty.call(this.LINE_CAPACITY, originalLine)
+      ? Number(originalLine)
+      : this.getFallbackChain(originalLine)[0];
+  }
+
   // Fallback chains per original line
   getFallbackChain(originalLine) {
     switch (originalLine) {
@@ -175,10 +298,21 @@ class AllocationEngine {
 
   // Allocate for one week
   allocateWeek(parts, dateCols, actualWorkingDays) {
-    // Group weekly totals by original line
+    // Group weekly totals by original line.
+    //
+    // A part whose column D is blank or non-numeric has originalLine === null.
+    // getFallbackChain() has always answered [1] for such a part, but the
+    // grouping below never reached it, so the part joined no group and was
+    // silently dropped: its demand still counted toward SUM (and therefore
+    // working days) while receiving zero allocation. On the real workbook that
+    // stranded 4,602 units in week BU alone.
+    //
+    // Grouping onto the first line of the part's own fallback chain routes it
+    // through the existing default. No chain is redefined here.
     const lineGroups = { 1: [], 2: [], 3: [], 4: [] };
     parts.forEach(p => {
-      if (lineGroups[p.originalLine]) lineGroups[p.originalLine].push(p);
+      const groupLine = this.resolveGroupLine(p.originalLine);
+      if (lineGroups[groupLine]) lineGroups[groupLine].push(p);
     });
 
     const lineTotals = {};
@@ -313,22 +447,39 @@ class AllocationEngine {
   }
 
   writeWeekAllocations(sheet1, parts, dateCols, startDateCount) {
-    // Ensure sheet range covers date columns
-    const range = XLSX.utils.decode_range(sheet1['!ref']);
-    let maxRow = range.e.r;
-    let maxCol = range.e.c;
     parts.forEach(p => {
-      if (p.rowIndex > maxRow) maxRow = p.rowIndex;
       p.allocations.forEach(a => {
         const colIdx = dateCols[a.dayIndex].colIndex;
-        if (colIdx > maxCol) maxCol = colIdx;
         const addr = XLSX.utils.encode_cell({ r: p.rowIndex, c: colIdx });
         const existing = sheet1[addr];
         const prev = existing && typeof existing.v === 'number' ? existing.v : 0;
         sheet1[addr] = { v: prev + a.qty, t: 'n' };
       });
     });
-    sheet1['!ref'] = XLSX.utils.encode_range({ s: { r: range.s.r, c: range.s.c }, e: { r: maxRow, c: maxCol } });
+    // The declared range must cover every populated cell, including the cells
+    // just written. Previously this grew the *declared* range, which inherited
+    // the workbook's inflated 1M-row ref and carried it into the output.
+    // Recomputing from the real cells after each write keeps the range exact and
+    // is order-independent across the three week passes.
+    this.normalizeSheetRange(sheet1);
+  }
+
+  // Shrink a sheet's declared '!ref' to the cells it actually contains.
+  // Purely metadata: no cell is added, removed or altered. The declared start is
+  // widened rather than narrowed so a cell can never fall outside the range.
+  normalizeSheetRange(sheet) {
+    if (!sheet) return;
+    const extent = getPopulatedExtent(sheet);
+    if (!extent) return;
+
+    const declared = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']) : null;
+    const startR = declared ? Math.min(declared.s.r, extent.minR) : extent.minR;
+    const startC = declared ? Math.min(declared.s.c, extent.minC) : extent.minC;
+
+    sheet['!ref'] = XLSX.utils.encode_range({
+      s: { r: startR, c: startC },
+      e: { r: extent.maxR, c: extent.maxC }
+    });
   }
 
   run(workbook) {
@@ -343,9 +494,13 @@ class AllocationEngine {
     const dateCols = collectDateColumns(sheet1);
     if (dateCols.length === 0) throw new Error('No date columns starting at CU in header row 3');
 
+    // Computed once and reused by all three week passes. Writes only ever touch
+    // rows that already exist, so the row bound stays valid across passes.
+    const sheet1Extent = getPopulatedExtent(sheet1);
+
     const weeksResults = [];
     this.WEEK_COLUMNS.forEach((wk, wkIdx) => {
-      const parts = this.parseWeekParts(sheet1, wk.letter, errors);
+      const parts = this.parseWeekParts(sheet1, wk.letter, errors, sheet1Extent);
       const { SUM, CountOfParts } = this.summarizeWeek(parts);
       let actualWorkingDaysRaw = SUM / this.FACTORY_DAILY_CAP;
       let actualWorkingDays = SUM === 0 ? 0 : Math.ceil(actualWorkingDaysRaw);
@@ -413,16 +568,26 @@ class AllocationEngine {
       });
     });
 
+    // Normalise both mutated sheets before returning. writeWeekAllocations
+    // already does this for sheet1, but it is skipped entirely when a week has
+    // no demand, so an inflated range would otherwise survive into the output.
+    this.normalizeSheetRange(sheet1);
+    this.normalizeSheetRange(sheet3);
+
     return { sheet1Name, sheet3Name, weeksResults, errors };
   }
 
+  // Allocated/remaining per line. Attribution uses resolveGroupLine(), the same
+  // rule allocateWeek() groups by, so totals always reconcile to SUM: a part can
+  // no longer be allocated without appearing in any line's totals.
   buildLineTotals(parts) {
     const totals = { 1: { allocated: 0, remaining: 0 }, 2: { allocated: 0, remaining: 0 }, 3: { allocated: 0, remaining: 0 }, 4: { allocated: 0, remaining: 0 } };
     parts.forEach(p => {
       const allocated = p.allocations.reduce((s,a)=> s + a.qty, 0);
-      if (totals[p.originalLine]) {
-        totals[p.originalLine].allocated += allocated;
-        totals[p.originalLine].remaining += p.remainingQty;
+      const line = this.resolveGroupLine(p.originalLine);
+      if (totals[line]) {
+        totals[line].allocated += allocated;
+        totals[line].remaining += p.remainingQty;
       }
     });
     return totals;

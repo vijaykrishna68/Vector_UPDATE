@@ -1,0 +1,4 @@
+# Golden-master files are generated with LF and compared as text. Pinning them to
+# LF keeps a Windows checkout (core.autocrlf=true) byte-identical to the committed
+# blob, so the golden comparison never fails on line endings alone.
+*.json text eol=lf

@@ -1,20 +1,55 @@
-# Dependencies
+# ---------------------------------------------------------------------------
+# Dependencies — never version-controlled. Reinstall from package-lock.json.
+# (server/node_modules and client/node_modules were tracked historically and
+#  were removed from history; these rules stop that recurring.)
+# ---------------------------------------------------------------------------
+node_modules/
 **/node_modules/
 
+# ---------------------------------------------------------------------------
 # Build output
+# ---------------------------------------------------------------------------
 **/dist/
 **/dist-ssr/
+**/build/
+*.tsbuildinfo
 
-# Environment files
+# ---------------------------------------------------------------------------
+# Environment files. .env.example is intentionally committed.
+# ---------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
 
-# Runtime/generated artifacts
-output/
+# ---------------------------------------------------------------------------
+# Runtime / generated artifacts
+#
+# uploads/  = workbooks submitted at runtime (was tracked historically)
+# output/   = generated workbooks
+# Allocated_*.xlsx = the allocator's own output filename pattern
+#   (see generateOutputFilename() in server/services/workbook.service.js)
+#
+# NOTE: deliberately NOT ignoring *.xlsx globally — sample/sample.xlsx is an
+# intentionally committed reference workbook, and a blanket rule would hide it
+# and any future intentional fixture.
+# ---------------------------------------------------------------------------
 uploads/
+output/
+Allocated_*.xlsx
+~$*.xlsx
 
+# Local-only golden masters derived from the real workbooks in uploads/.
+# These may encode production/customer figures and must never be committed.
+# The synthetic golden (server/test/__golden__/synthetic-workbook.json) IS committed.
+**/__golden__/*.local.json
+
+# Any file a developer marks as local-only.
+*.local
+*.local.*
+
+# ---------------------------------------------------------------------------
 # Logs
+# ---------------------------------------------------------------------------
 **/logs/
 *.log
 npm-debug.log*
@@ -22,8 +57,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ---------------------------------------------------------------------------
 # OS / editor
+# ---------------------------------------------------------------------------
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
 *.suo

@@ -10,4 +10,22 @@ async function connectDB() {
   return mongoose.connection;
 }
 
-module.exports = { connectDB };
+// mongoose.connection.readyState is a numeric enum; map it for /health.
+const READY_STATES = {
+  0: 'disconnected',
+  1: 'connected',
+  2: 'connecting',
+  3: 'disconnecting',
+  99: 'uninitialized'
+};
+
+function getConnectionState() {
+  const readyState = mongoose.connection.readyState;
+  return {
+    readyState,
+    status: READY_STATES[readyState] || 'unknown',
+    connected: readyState === 1
+  };
+}
+
+module.exports = { connectDB, getConnectionState };

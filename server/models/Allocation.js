@@ -13,4 +13,10 @@ const AllocationSchema = new Schema(
   { versionKey: false }
 );
 
+// Matches the only query this collection serves:
+//   Allocation.find({ runId, jobId: { $in: jobIds } })
+// The single-field indexes above are now redundant as a prefix of this one, but
+// dropping an existing index needs a deliberate migration, so they stay for now.
+AllocationSchema.index({ runId: 1, jobId: 1 });
+
 module.exports = mongoose.model('Allocation', AllocationSchema);
