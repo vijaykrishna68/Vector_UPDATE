@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 /*
+ * Phase 5 — visual identity. One accent scale ("brand"), layered on top of the
+ * existing neutral slate + semantic STATUS colors (lib/status.js). Brand color
+ * is used only for interactive/identity moments (primary actions, focus,
+ * selection, the logo mark) — never for status meaning, which stays exactly as
+ * defined in lib/status.js.
+ */
+@theme {
+  --color-brand-50: #eef2f7;
+  --color-brand-100: #dbe4ee;
+  --color-brand-200: #b7c9dd;
+  --color-brand-300: #8ba9c8;
+  --color-brand-400: #5c86ac;
+  --color-brand-500: #3d6790;
+  --color-brand-600: #2c5074;
+  --color-brand-700: #21405e;
+  --color-brand-800: #1a3249;
+  --color-brand-900: #14263a;
+}
+
+/*
  * Base layer only. All component styling lives in components/ui.jsx so the
  * visual system has one home rather than being spread across ad-hoc classes.
  */
