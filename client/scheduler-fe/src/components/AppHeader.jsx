@@ -19,15 +19,15 @@ export default function AppHeader({ view, navigate, run }) {
   const runStatus = run?.id ? statusForHealth(run.health) : null;
 
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="border-b border-paper-300 bg-paper-50">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center bg-brand-800">
+          <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-[3px] bg-accent-600">
             <Factory className="h-4 w-4 text-white" />
           </span>
           <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight text-slate-900">Vector Allocation</p>
-            <p className="text-[11px] font-medium tracking-wide text-slate-500">Production Planning System</p>
+            <p className="text-sm font-semibold tracking-tight text-paper-900">Vector Allocation</p>
+            <p className="text-[11px] font-medium tracking-wide text-paper-500">Production Planning System</p>
           </div>
         </div>
 
@@ -44,10 +44,10 @@ export default function AppHeader({ view, navigate, run }) {
                   event.preventDefault();
                   navigate(item.href);
                 }}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium transition-colors ${FOCUS_RING} ${
+                className={`inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-1.5 text-sm font-medium transition-colors ${FOCUS_RING} ${
                   active
-                    ? 'bg-brand-50 text-brand-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'bg-accent-50 text-accent-800'
+                    : 'text-paper-600 hover:bg-paper-150 hover:text-paper-900'
                 }`}
               >
                 <item.icon className="h-4 w-4" aria-hidden="true" />
@@ -66,7 +66,7 @@ export default function AppHeader({ view, navigate, run }) {
                 event.preventDefault();
                 navigate('/history');
               }}
-              className={`block text-right ${FOCUS_RING} hover:bg-slate-50`}
+              className={`block text-right ${FOCUS_RING} hover:bg-paper-150`}
               title={`Run ${run.id}${run.sourceFilename ? ` — ${run.sourceFilename}` : ''} · view run history`}
             >
               <span className="flex items-center justify-end gap-1.5">
@@ -75,13 +75,13 @@ export default function AppHeader({ view, navigate, run }) {
                   {runStatus.label}
                 </span>
               </span>
-              <span className="mt-0.5 block font-mono text-slate-800">
+              <span className="mt-0.5 block font-mono text-paper-800">
                 Run #{shortId(run.id)}
-                <span className="ml-2 font-sans text-slate-500">{formatTimestamp(run.createdAt)}</span>
+                <span className="ml-2 font-sans text-paper-500">{formatTimestamp(run.createdAt)}</span>
               </span>
             </a>
           ) : (
-            <span className="text-slate-400">No planning run</span>
+            <span className="text-paper-400">No planning run</span>
           )}
         </div>
       </div>

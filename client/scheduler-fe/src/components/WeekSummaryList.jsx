@@ -30,13 +30,13 @@ export default function WeekSummaryList({ weeks, issuesSummary = [], selectedWee
               selected={selected}
               onClick={() => onSelect(week.weekColumn)}
               className={`w-full p-4 text-left transition-colors ${FOCUS_RING} ${
-                selected ? '' : 'hover:border-slate-400'
+                selected ? '' : 'hover:border-paper-400'
               }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <Label>Week</Label>
-                  <p className="font-mono text-lg font-semibold text-slate-900">{week.weekColumn}</p>
+                  <p className="font-mono text-lg font-semibold text-paper-900">{week.weekColumn}</p>
                 </div>
                 <StatusBadge status={status} />
               </div>
@@ -52,19 +52,19 @@ export default function WeekSummaryList({ weeks, issuesSummary = [], selectedWee
                   <dt>
                     <Label>Demand</Label>
                   </dt>
-                  <dd className="font-mono tabular-nums text-slate-900">{formatInt(week.SUM)}</dd>
+                  <dd className="font-mono tabular-nums text-paper-900">{formatInt(week.SUM)}</dd>
                 </div>
                 <div>
                   <dt>
                     <Label>Allocated</Label>
                   </dt>
-                  <dd className="font-mono tabular-nums text-slate-900">{formatInt(allocated)}</dd>
+                  <dd className="font-mono tabular-nums text-paper-900">{formatInt(allocated)}</dd>
                 </div>
                 <div>
                   <dt>
                     <Label>Remaining</Label>
                   </dt>
-                  <dd className={`font-mono tabular-nums ${remaining > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+                  <dd className={`font-mono tabular-nums ${remaining > 0 ? 'text-critical-700' : 'text-paper-400'}`}>
                     {formatInt(remaining)}
                   </dd>
                 </div>
@@ -72,27 +72,27 @@ export default function WeekSummaryList({ weeks, issuesSummary = [], selectedWee
                   <dt>
                     <Label>Working days</Label>
                   </dt>
-                  <dd className="font-mono tabular-nums text-slate-900">
+                  <dd className="font-mono tabular-nums text-paper-900">
                     {formatInt(week.actualWorkingDays)}
                   </dd>
                 </div>
               </dl>
 
-              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
+              <div className="mt-3 flex flex-wrap gap-1.5 border-t border-paper-200 pt-2">
                 {(week.lines || []).map((line) => (
                   <span
                     key={line.line}
-                    className="inline-flex items-baseline gap-1 bg-slate-50 px-1.5 py-0.5 text-xs ring-1 ring-inset ring-slate-200"
+                    className="inline-flex items-baseline gap-1 rounded-[3px] bg-paper-150 px-1.5 py-0.5 text-xs ring-1 ring-inset ring-paper-300"
                     title={`Line ${line.line}: ${formatInt(line.allocatedParts)} allocated, ${formatInt(
                       line.remainingParts
                     )} remaining`}
                   >
-                    <span className="text-slate-500">L{line.line}</span>
-                    <span className="font-mono tabular-nums text-slate-800">
+                    <span className="text-paper-500">L{line.line}</span>
+                    <span className="font-mono tabular-nums text-paper-800">
                       {formatInt(line.allocatedParts)}
                     </span>
                     {line.remainingParts > 0 && (
-                      <span className="font-mono tabular-nums text-red-700">
+                      <span className="font-mono tabular-nums text-critical-700">
                         +{formatInt(line.remainingParts)}
                       </span>
                     )}
@@ -101,7 +101,7 @@ export default function WeekSummaryList({ weeks, issuesSummary = [], selectedWee
               </div>
             </Card>
             {i < weeks.length - 1 && (
-              <ArrowRight className="mt-16 hidden h-4 w-4 shrink-0 text-slate-300 md:block" aria-hidden="true" />
+              <ArrowRight className="mt-16 hidden h-4 w-4 shrink-0 text-paper-300 md:block" aria-hidden="true" />
             )}
           </div>
         );

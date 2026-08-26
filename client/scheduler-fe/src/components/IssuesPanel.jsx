@@ -21,8 +21,8 @@ export default function IssuesPanel({ issuesSummary, runId, week, title = 'Sched
   if (groups.length === 0) {
     return (
       <Card>
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">{title}</h2>
+        <div className="border-b border-paper-300 px-4 py-3">
+          <h2 className="text-sm font-semibold tracking-wide text-paper-900 uppercase">{title}</h2>
         </div>
         <EmptyState
           title="No issues reported"
@@ -38,13 +38,13 @@ export default function IssuesPanel({ issuesSummary, runId, week, title = 'Sched
 
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">{title}</h2>
-        <span className="text-xs text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-paper-300 px-4 py-3">
+        <h2 className="text-sm font-semibold tracking-wide text-paper-900 uppercase">{title}</h2>
+        <span className="text-xs text-paper-500">
           {formatInt(total)} {total === 1 ? 'issue' : 'issues'} reported
         </span>
       </div>
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-paper-200">
         {groups.map((group) => (
           <IssueGroup key={group.code} group={group} runId={runId} week={week} />
         ))}
@@ -63,20 +63,20 @@ function IssueGroup({ group, runId, week }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 ${FOCUS_RING}`}
+        className={`flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-paper-150 ${FOCUS_RING}`}
       >
-        <Chevron className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+        <Chevron className="mt-0.5 h-4 w-4 shrink-0 text-paper-400" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
             <StatusBadge status={group.status} />
-            <span className="text-sm font-medium text-slate-900">{group.title}</span>
+            <span className="text-sm font-medium text-paper-900">{group.title}</span>
             <Badge className="font-mono tabular-nums">{formatInt(group.count)}</Badge>
           </span>
-          <span className="mt-1 block text-sm text-slate-600">{group.description}</span>
+          <span className="mt-1 block text-sm text-paper-600">{group.description}</span>
           <span className="mt-1.5 flex flex-wrap items-center gap-2">
             <Label>{group.code}</Label>
             {group.affectedWeeks?.length > 0 && (
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-paper-500">
                 Weeks: <span className="font-mono">{group.affectedWeeks.join(', ')}</span>
               </span>
             )}
@@ -85,7 +85,7 @@ function IssueGroup({ group, runId, week }) {
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 pl-11">
+        <div className="border-t border-paper-200 bg-paper-150 px-4 py-3 pl-11">
           <IssueExamples group={group} runId={runId} week={week} />
         </div>
       )}
@@ -102,7 +102,7 @@ function IssueExamples({ group, runId, week }) {
       <Label>Examples reported by the allocator</Label>
       <ul className="mt-2 space-y-1">
         {(group.examples || []).map((message, i) => (
-          <li key={i} className="font-mono text-xs break-words text-slate-700">
+          <li key={i} className="font-mono text-xs break-words text-paper-700">
             {message}
           </li>
         ))}
@@ -115,7 +115,7 @@ function IssueExamples({ group, runId, week }) {
               Load all {formatInt(group.count)}
             </Button>
           ) : (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-paper-500">
               Showing {group.examples?.length || 0} of {formatInt(group.count)}.
             </p>
           )}
@@ -145,8 +145,8 @@ function FullIssueList({ runId, code, week }) {
     <div className="mt-3">
       <ol className="space-y-1" start={(page - 1) * PAGE_SIZE + 1}>
         {issues.map((issue, i) => (
-          <li key={i} className="font-mono text-xs break-words text-slate-700">
-            {issue.week && <span className="mr-1 text-slate-400">[{issue.week}]</span>}
+          <li key={i} className="font-mono text-xs break-words text-paper-700">
+            {issue.week && <span className="mr-1 text-paper-400">[{issue.week}]</span>}
             {issue.message}
           </li>
         ))}
@@ -156,7 +156,7 @@ function FullIssueList({ runId, code, week }) {
         <Button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
           Previous
         </Button>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-paper-500">
           Page <span className="font-mono">{page}</span> of <span className="font-mono">{totalPages}</span>
           {' · '}
           <span className="font-mono">{formatInt(total)}</span> total

@@ -1,23 +1,68 @@
 @import "tailwindcss";
 
 /*
- * Phase 5 — visual identity. One accent scale ("brand"), layered on top of the
- * existing neutral slate + semantic STATUS colors (lib/status.js). Brand color
- * is used only for interactive/identity moments (primary actions, focus,
- * selection, the logo mark) — never for status meaning, which stays exactly as
- * defined in lib/status.js.
+ * Vector's design system: a warm-paper industrial palette for a production
+ * planning document, not a SaaS admin theme. One neutral scale ("paper", warm
+ * ivory to graphite) carries ~75% of the UI; "accent" (industrial orange) is
+ * reserved for primary actions, selection and identity; "positive"/"warning"/
+ * "critical" are the only status hues and stay in sync with lib/status.js.
+ * --font-mono is IBM Plex Mono, applied via the existing font-mono utility to
+ * every technical value (quantities, capacity, timestamps, IDs) already in the
+ * codebase, so no component markup needed to change for that.
  */
 @theme {
-  --color-brand-50: #eef2f7;
-  --color-brand-100: #dbe4ee;
-  --color-brand-200: #b7c9dd;
-  --color-brand-300: #8ba9c8;
-  --color-brand-400: #5c86ac;
-  --color-brand-500: #3d6790;
-  --color-brand-600: #2c5074;
-  --color-brand-700: #21405e;
-  --color-brand-800: #1a3249;
-  --color-brand-900: #14263a;
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-paper-50: #fcfbf8;
+  --color-paper-100: #f7f6f2;
+  --color-paper-150: #f1efe8;
+  --color-paper-200: #eae7de;
+  --color-paper-300: #ddd8cb;
+  --color-paper-400: #c3bda9;
+  --color-paper-500: #6b7075;
+  --color-paper-600: #55585c;
+  --color-paper-700: #3f4144;
+  --color-paper-800: #2c2e30;
+  --color-paper-900: #202124;
+
+  --color-accent-50: #fbf0e7;
+  --color-accent-100: #f6dec7;
+  --color-accent-200: #efc29c;
+  --color-accent-300: #e7a16d;
+  --color-accent-400: #e08c4f;
+  --color-accent-500: #d97732;
+  --color-accent-600: #c2661f;
+  --color-accent-700: #a2551a;
+  --color-accent-800: #7d4315;
+  --color-accent-900: #5c3210;
+
+  --color-positive-50: #eaf3f2;
+  --color-positive-100: #cfe4e2;
+  --color-positive-200: #a8cfcc;
+  --color-positive-300: #7db8b4;
+  --color-positive-600: #35655f;
+  --color-positive-700: #2b534f;
+  --color-positive-800: #21403d;
+  --color-positive-900: #172e2b;
+
+  --color-warning-50: #fbf3e7;
+  --color-warning-100: #f3e0bf;
+  --color-warning-200: #e8c98d;
+  --color-warning-600: #9c6f2e;
+  --color-warning-700: #7f5924;
+  --color-warning-800: #63451b;
+  --color-warning-900: #493213;
+
+  --color-critical-50: #fbebea;
+  --color-critical-100: #f3cccb;
+  --color-critical-200: #e5a6a4;
+  --color-critical-600: #9e3c3a;
+  --color-critical-700: #832f2e;
+  --color-critical-800: #692524;
+  --color-critical-900: #4e1c1b;
 }
 
 /*
@@ -31,9 +76,7 @@
   }
 
   body {
-    /* System UI stack: this is a dense internal tool, not a branded site. */
-    font-family:
-      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-sans);
     font-feature-settings: "cv11";
   }
 

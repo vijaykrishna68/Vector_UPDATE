@@ -130,19 +130,19 @@ function WeekTable({ week, parts, dateHeaders, onlyUnmet, onToggleUnmet, refresh
 
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-paper-200 px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">
+          <h2 className="text-sm font-semibold tracking-wide text-paper-900 uppercase">
             Week {week} allocation
           </h2>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <p className="mt-0.5 text-sm text-paper-500">
             <span className="font-mono tabular-nums">{formatInt(parts.length)}</span> parts ·{' '}
             <span className="font-mono tabular-nums">{formatInt(totals.demand)}</span> demand ·{' '}
             <span className="font-mono tabular-nums">{formatInt(totals.allocated)}</span> allocated
             {totals.remaining > 0 && (
               <>
                 {' · '}
-                <span className="font-mono tabular-nums text-red-700">
+                <span className="font-mono tabular-nums text-critical-700">
                   {formatInt(totals.remaining)}
                 </span>{' '}
                 unallocated
@@ -152,13 +152,13 @@ function WeekTable({ week, parts, dateHeaders, onlyUnmet, onToggleUnmet, refresh
         </div>
 
         <div className="flex items-center gap-2">
-          {refreshing && <span className="text-xs text-slate-500">Refreshing…</span>}
+          {refreshing && <span className="text-xs text-paper-500">Refreshing…</span>}
           {unmetCount > 0 && (
             <Button
               icon={Filter}
               onClick={onToggleUnmet}
               aria-pressed={onlyUnmet}
-              className={onlyUnmet ? 'ring-slate-900' : ''}
+              className={onlyUnmet ? 'ring-paper-900' : ''}
             >
               {onlyUnmet ? 'Show all parts' : `Only unallocated (${formatInt(unmetCount)})`}
             </Button>
@@ -211,25 +211,25 @@ function WeekTable({ week, parts, dateHeaders, onlyUnmet, onToggleUnmet, refresh
           ))}
         </tbody>
         <tfoot>
-          <tr className="bg-slate-50">
-            <Td sticky className="left-0 z-10 bg-slate-50 font-medium">
+          <tr className="bg-paper-150">
+            <Td sticky className="left-0 z-10 bg-paper-150 font-medium">
               Total
             </Td>
-            <Td colSpan={3} className="bg-slate-50" />
-            <Td numeric align="right" className="bg-slate-50 font-medium">
+            <Td colSpan={3} className="bg-paper-150" />
+            <Td numeric align="right" className="bg-paper-150 font-medium">
               {formatInt(totals.demand)}
             </Td>
-            <Td numeric align="right" className="bg-slate-50 font-medium">
+            <Td numeric align="right" className="bg-paper-150 font-medium">
               {formatInt(totals.allocated)}
             </Td>
             <Td
               numeric
               align="right"
-              className={`bg-slate-50 font-medium ${totals.remaining > 0 ? 'text-red-700' : ''}`}
+              className={`bg-paper-150 font-medium ${totals.remaining > 0 ? 'text-critical-700' : ''}`}
             >
               {formatInt(totals.remaining)}
             </Td>
-            <Td className="bg-slate-50" />
+            <Td className="bg-paper-150" />
             {days.map((dayIndex) => {
               const dayTotal = parts.reduce(
                 (sum, p) =>
@@ -237,7 +237,7 @@ function WeekTable({ week, parts, dateHeaders, onlyUnmet, onToggleUnmet, refresh
                 0
               );
               return (
-                <Td key={dayIndex} numeric align="right" className="bg-slate-50 font-medium">
+                <Td key={dayIndex} numeric align="right" className="bg-paper-150 font-medium">
                   {dayTotal > 0 ? formatInt(dayTotal) : ''}
                 </Td>
               );
@@ -247,7 +247,7 @@ function WeekTable({ week, parts, dateHeaders, onlyUnmet, onToggleUnmet, refresh
       </TableShell>
 
       {rows.length === 0 && (
-        <div className="border-t border-slate-200">
+        <div className="border-t border-paper-200">
           <EmptyState
             title="No parts match this filter"
             description="Every part in this week was fully allocated."
@@ -281,13 +281,13 @@ function PartRow({ part, days }) {
   });
 
   return (
-    <tr className="hover:bg-slate-50">
+    <tr className="hover:bg-paper-150">
       <Td sticky className="left-0 z-10 font-medium whitespace-nowrap">
         {part.spec}
       </Td>
       <Td align="center">
         {part.originalLine === null ? (
-          <span className="text-slate-400" title="No line designated in the source workbook">
+          <span className="text-paper-400" title="No line designated in the source workbook">
             —
           </span>
         ) : (
@@ -297,14 +297,14 @@ function PartRow({ part, days }) {
       <Td align="center">
         <span className="inline-flex flex-wrap justify-center gap-1">
           {linesUsed.length === 0 ? (
-            <span className="text-slate-400">—</span>
+            <span className="text-paper-400">—</span>
           ) : (
             linesUsed.map((line) => (
               <Badge
                 key={line}
                 className={`font-mono tabular-nums ${
                   part.originalLine !== null && line !== part.originalLine
-                    ? 'bg-amber-50 text-amber-900 ring-amber-200'
+                    ? 'bg-warning-50 text-warning-900 ring-warning-200'
                     : ''
                 }`}
               >
@@ -314,7 +314,7 @@ function PartRow({ part, days }) {
           )}
         </span>
       </Td>
-      <Td numeric align="right" className="text-slate-500">
+      <Td numeric align="right" className="text-paper-500">
         {formatNumber(part.cycleTime, 2)}
       </Td>
       <Td numeric align="right">
@@ -323,7 +323,7 @@ function PartRow({ part, days }) {
       <Td numeric align="right">
         {formatInt(part.allocated)}
       </Td>
-      <Td numeric align="right" className={part.remainingQty > 0 ? 'font-medium text-red-700' : 'text-slate-400'}>
+      <Td numeric align="right" className={part.remainingQty > 0 ? 'font-medium text-critical-700' : 'text-paper-400'}>
         {formatInt(part.remainingQty)}
       </Td>
       <Td align="center">
@@ -335,7 +335,7 @@ function PartRow({ part, days }) {
         const title = entries.map((a) => `Line ${a.line}: ${a.qty}`).join(', ');
         return (
           <Td key={dayIndex} numeric align="right" title={title || undefined}>
-            {qty > 0 ? formatInt(qty) : <span className="text-slate-200">·</span>}
+            {qty > 0 ? formatInt(qty) : <span className="text-paper-200">·</span>}
           </Td>
         );
       })}

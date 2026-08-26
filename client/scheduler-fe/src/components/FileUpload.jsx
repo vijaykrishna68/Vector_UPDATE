@@ -110,21 +110,21 @@ export default function FileUpload({ onRunCreated, navigate }) {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           className={`mt-2 border-2 border-dashed p-8 text-center transition-colors ${
-            dragging ? 'border-slate-900 bg-slate-50' : 'border-slate-300'
+            dragging ? 'border-accent-600 bg-paper-150' : 'border-paper-300'
           }`}
         >
-          <FileSpreadsheet className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
-          <p className="mt-3 text-sm text-slate-700">
+          <FileSpreadsheet className="mx-auto h-8 w-8 text-paper-400" aria-hidden="true" />
+          <p className="mt-3 text-sm text-paper-700">
             Drag a workbook here, or{' '}
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className={`font-medium text-slate-900 underline underline-offset-2 hover:no-underline ${FOCUS_RING}`}
+              className={`font-medium text-paper-900 underline underline-offset-2 hover:no-underline ${FOCUS_RING}`}
             >
               browse for a file
             </button>
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-paper-500">
             Excel workbooks only ({ACCEPTED_EXTENSIONS.join(', ')}), up to {formatBytes(MAX_BYTES)}
           </p>
           <input
@@ -138,28 +138,28 @@ export default function FileUpload({ onRunCreated, navigate }) {
 
         {/* Selected file */}
         {file && (
-          <div className="mt-4 border border-slate-200">
+          <div className="mt-4 border border-paper-300">
             <div className="flex items-start gap-3 p-3">
-              <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" aria-hidden="true" />
+              <FileSpreadsheet className="mt-0.5 h-5 w-5 shrink-0 text-paper-500" aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
-                <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                <p className="truncate text-sm font-medium text-paper-900">{file.name}</p>
+                <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-paper-500">
                   <div className="flex gap-1">
                     <dt>Size</dt>
-                    <dd className="font-mono tabular-nums text-slate-700">{formatBytes(file.size)}</dd>
+                    <dd className="font-mono tabular-nums text-paper-700">{formatBytes(file.size)}</dd>
                   </div>
                   <div className="flex gap-1">
                     <dt>Type</dt>
-                    <dd className="text-slate-700">{file.type || 'unknown'}</dd>
+                    <dd className="text-paper-700">{file.type || 'unknown'}</dd>
                   </div>
                 </dl>
                 {validationError ? (
-                  <p className="mt-2 flex items-start gap-1.5 text-sm text-red-700">
+                  <p className="mt-2 flex items-start gap-1.5 text-sm text-critical-700">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     {validationError}
                   </p>
                 ) : (
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-emerald-800">
+                  <p className="mt-2 flex items-center gap-1.5 text-sm text-positive-800">
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                     Ready to process
                   </p>
@@ -170,7 +170,7 @@ export default function FileUpload({ onRunCreated, navigate }) {
                   type="button"
                   onClick={clear}
                   aria-label="Remove selected file"
-                  className={`p-1 text-slate-400 hover:text-slate-700 ${FOCUS_RING}`}
+                  className={`p-1 text-paper-400 hover:text-paper-700 ${FOCUS_RING}`}
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -191,7 +191,7 @@ export default function FileUpload({ onRunCreated, navigate }) {
             )}
           </Button>
           {busy && (
-            <span className="text-sm text-slate-500" role="status" aria-live="polite">
+            <span className="text-sm text-paper-500" role="status" aria-live="polite">
               {elapsed}s elapsed — allocating and writing the workbook
             </span>
           )}
@@ -200,14 +200,14 @@ export default function FileUpload({ onRunCreated, navigate }) {
 
       {/* Failure */}
       {status === 'error' && error && (
-        <Card className="border-red-200 p-5" role="alert">
+        <Card className="border-critical-200 p-5" role="alert">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-critical-600" aria-hidden="true" />
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-slate-900">Processing failed</h3>
-              <p className="mt-1 text-sm text-slate-700">{error.message}</p>
+              <h3 className="text-sm font-semibold text-paper-900">Processing failed</h3>
+              <p className="mt-1 text-sm text-paper-700">{error.message}</p>
               {(error.code || error.requestId) && (
-                <p className="mt-2 font-mono text-xs text-slate-400">
+                <p className="mt-2 font-mono text-xs text-paper-400">
                   {error.code}
                   {error.requestId ? ` · request ${error.requestId}` : ''}
                 </p>
@@ -227,12 +227,12 @@ export default function FileUpload({ onRunCreated, navigate }) {
 
       {/* Success */}
       {status === 'success' && result && (
-        <Card className="border-emerald-200 p-5">
+        <Card className="border-positive-200 p-5">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-positive-600" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold text-slate-900">Schedule generated</h3>
-              <p className="mt-1 text-sm text-slate-600">
+              <h3 className="text-sm font-semibold text-paper-900">Schedule generated</h3>
+              <p className="mt-1 text-sm text-paper-600">
                 Processed in {result.seconds}s. The allocation plan is stored as a planning run and the
                 updated workbook is ready to download.
               </p>
@@ -242,13 +242,13 @@ export default function FileUpload({ onRunCreated, navigate }) {
                   <dt>
                     <Label>Output file</Label>
                   </dt>
-                  <dd className="truncate font-mono text-sm text-slate-900">{result.outputFileName}</dd>
+                  <dd className="truncate font-mono text-sm text-paper-900">{result.outputFileName}</dd>
                 </div>
                 <div>
                   <dt>
                     <Label>Planning run</Label>
                   </dt>
-                  <dd className="font-mono text-sm text-slate-900">{result.runId || '—'}</dd>
+                  <dd className="font-mono text-sm text-paper-900">{result.runId || '—'}</dd>
                 </div>
               </dl>
 

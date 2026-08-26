@@ -13,6 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@tailwindcss/vite": "^4.1.12",
     "lucide-react": "^0.541.0",
     "react": "^19.1.1",

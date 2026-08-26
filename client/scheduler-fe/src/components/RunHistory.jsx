@@ -60,14 +60,14 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
 
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-paper-300 px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold tracking-wide text-slate-900 uppercase">Planning runs</h2>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <h2 className="text-sm font-semibold tracking-wide text-paper-900 uppercase">Planning runs</h2>
+          <p className="mt-0.5 text-sm text-paper-500">
             Select a run to load its dashboard and schedule.
           </p>
         </div>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-paper-500">
           <span className="font-mono tabular-nums">{formatInt(total)}</span> total
         </span>
       </div>
@@ -94,19 +94,19 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
           {runs.map((run) => {
             const isActive = String(run.runId) === String(activeRunId);
             return (
-              <tr key={run.runId} className={isActive ? 'bg-slate-50' : 'hover:bg-slate-50'}>
+              <tr key={run.runId} className={isActive ? 'bg-paper-150' : 'hover:bg-paper-150'}>
                 <Td>
                   <span className="flex items-center gap-2">
                     {isActive && (
                       <span
-                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-900"
+                        className="inline-flex items-center gap-1 text-xs font-medium text-paper-900"
                         title="Currently active run"
                       >
                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="sr-only">Active run:</span>
                       </span>
                     )}
-                    <span className="font-mono text-slate-800" title={run.runId}>
+                    <span className="font-mono text-paper-800" title={run.runId}>
                       {shortId(run.runId)}
                     </span>
                   </span>
@@ -115,13 +115,13 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
                 <Td className="max-w-[220px]">
                   {run.sourceFilename ? (
                     <span className="flex items-center gap-1.5">
-                      <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                      <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-paper-400" aria-hidden="true" />
                       <span className="truncate" title={run.sourceFilename}>
                         {run.sourceFilename}
                       </span>
                     </span>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-paper-400">—</span>
                   )}
                 </Td>
                 <Td align="center" className="font-mono text-xs whitespace-nowrap">
@@ -136,11 +136,11 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
                 <Td
                   numeric
                   align="right"
-                  className={run.totals?.remaining > 0 ? 'font-medium text-red-700' : 'text-slate-400'}
+                  className={run.totals?.remaining > 0 ? 'font-medium text-critical-700' : 'text-paper-400'}
                 >
                   {formatInt(run.totals?.remaining)}
                 </Td>
-                <Td numeric align="right" className="text-slate-600">
+                <Td numeric align="right" className="text-paper-600">
                   {formatInt(run.issueCount)}
                 </Td>
                 <Td align="center">
@@ -148,12 +148,12 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
                 </Td>
                 <Td align="right">
                   {isActive ? (
-                    <span className="text-xs font-medium text-slate-500">Active</span>
+                    <span className="text-xs font-medium text-paper-500">Active</span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onSelectRun(run.runId)}
-                      className={`text-sm font-medium text-slate-900 underline underline-offset-2 hover:no-underline ${FOCUS_RING}`}
+                      className={`text-sm font-medium text-paper-900 underline underline-offset-2 hover:no-underline ${FOCUS_RING}`}
                     >
                       Select
                     </button>
@@ -166,11 +166,11 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
       </TableShell>
 
       {totalPages > 1 && (
-        <div className="flex items-center gap-2 border-t border-slate-200 px-4 py-3">
+        <div className="flex items-center gap-2 border-t border-paper-300 px-4 py-3">
           <Button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
             Previous
           </Button>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-paper-500">
             Page <span className="font-mono">{page}</span> of <span className="font-mono">{totalPages}</span>
           </span>
           <Button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
@@ -179,7 +179,7 @@ export default function RunHistory({ activeRunId, onSelectRun, navigate }) {
         </div>
       )}
 
-      <div className="border-t border-slate-200 px-4 py-2">
+      <div className="border-t border-paper-300 px-4 py-2">
         <Label>
           Selecting a run changes only what this browser tab shows. Other runs are untouched.
         </Label>

@@ -24,7 +24,7 @@ export default function ProductionLineCard({ line }) {
           <Label>Line</Label>
           <h3
             id={`line-${line.line}-heading`}
-            className="font-mono text-2xl leading-none font-semibold tabular-nums text-slate-900"
+            className="font-mono text-2xl leading-none font-semibold tabular-nums text-paper-900"
           >
             {String(line.line).padStart(2, '0')}
           </h3>
@@ -34,17 +34,17 @@ export default function ProductionLineCard({ line }) {
 
       <div className="mt-4">
         <Label>Parts allocated</Label>
-        <p className="mt-1 font-mono text-2xl font-semibold tabular-nums tracking-tight text-slate-900">
+        <p className="mt-1 font-mono text-2xl font-semibold tabular-nums tracking-tight text-paper-900">
           {formatInt(line.allocatedParts)}
         </p>
         {line.remainingParts > 0 && (
-          <p className="mt-0.5 text-xs font-medium text-red-700">
+          <p className="mt-0.5 text-xs font-medium text-critical-700">
             {formatInt(line.remainingParts)} unmet
           </p>
         )}
       </div>
 
-      <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="mt-4 border-t border-paper-200 pt-3">
         <CapacityRail label="Capacity" usedMinutes={line.usedMinutes} capacityMinutes={line.capacityMinutes} />
       </div>
     </Card>

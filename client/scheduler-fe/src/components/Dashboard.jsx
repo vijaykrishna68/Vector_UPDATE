@@ -104,16 +104,16 @@ export default function Dashboard({ weeksQuery, navigate }) {
     <div className="space-y-6">
       {/* Run summary — the whole story, top to bottom, in a few seconds. */}
       <Card>
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-slate-100 px-4 py-2.5 text-xs text-slate-500">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-paper-200 px-4 py-2.5 text-xs text-paper-500">
           <span>
-            Run <span className="font-mono text-slate-700">{shortId(run.id)}</span>
+            Run <span className="font-mono text-paper-700">{shortId(run.id)}</span>
           </span>
           <span>{formatTimestamp(run.createdAt)}</span>
           <span>
-            Weeks <span className="font-mono text-slate-700">{weeks.map((w) => w.weekColumn).join(' · ')}</span>
+            Weeks <span className="font-mono text-paper-700">{weeks.map((w) => w.weekColumn).join(' · ')}</span>
           </span>
           <span>
-            Lines <span className="font-mono text-slate-700">{lines.length}</span>
+            Lines <span className="font-mono text-paper-700">{lines.length}</span>
           </span>
           {productionWindow && <span>{productionWindow}</span>}
           <Button variant="ghost" className="ml-auto" icon={ArrowRight} onClick={() => navigate('/schedule')}>
@@ -129,7 +129,7 @@ export default function Dashboard({ weeksQuery, navigate }) {
                 label="Allocated of total demand"
                 value={
                   <>
-                    {formatInt(allocated)} <span className="text-slate-300">/</span> {formatInt(demand)}
+                    {formatInt(allocated)} <span className="text-paper-300">/</span> {formatInt(demand)}
                   </>
                 }
                 unit="parts"
@@ -138,7 +138,7 @@ export default function Dashboard({ weeksQuery, navigate }) {
             </div>
           </div>
 
-          <div className="flex flex-col justify-center border-slate-100 lg:border-l lg:pl-6">
+          <div className="flex flex-col justify-center border-paper-200 lg:border-l lg:pl-6">
             <CapacityRail
               label="Capacity utilisation"
               usedMinutes={usedMinutes}
@@ -148,13 +148,13 @@ export default function Dashboard({ weeksQuery, navigate }) {
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 divide-y divide-slate-100 border-t border-slate-100 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        <dl className="grid grid-cols-2 divide-y divide-paper-200 border-t border-paper-200 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
           <SupportingStat label="Total demand" value={formatInt(demand)} />
           <SupportingStat label="Allocated" value={formatInt(allocated)} />
           <SupportingStat
             label="Unallocated"
             value={formatInt(remaining)}
-            tone={remaining > 0 ? 'text-red-700' : undefined}
+            tone={remaining > 0 ? 'text-critical-700' : undefined}
           />
           <SupportingStat label="Capacity used" value={formatInt(usedMinutes)} hint={`of ${formatInt(capacityMinutes)} min`} />
         </dl>
@@ -200,7 +200,7 @@ export default function Dashboard({ weeksQuery, navigate }) {
               </div>
               {i < weeks.length - 1 && (
                 <ArrowRight
-                  className="mt-16 hidden h-4 w-4 shrink-0 text-slate-300 md:block"
+                  className="mt-16 hidden h-4 w-4 shrink-0 text-paper-300 md:block"
                   aria-hidden="true"
                 />
               )}
@@ -208,7 +208,7 @@ export default function Dashboard({ weeksQuery, navigate }) {
           ))}
         </div>
         {weeks.every((w) => (Number(w.SUM) || 0) === 0) && (
-          <p className="mt-3 text-sm text-slate-500">
+          <p className="mt-3 text-sm text-paper-500">
             No week in this run carried any demand after filtering.
           </p>
         )}
@@ -228,8 +228,8 @@ function SupportingStat({ label, value, hint, tone }) {
   return (
     <div className="px-4 py-3">
       <Label>{label}</Label>
-      <p className={`mt-1 font-mono text-lg font-medium tabular-nums ${tone || 'text-slate-900'}`}>{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+      <p className={`mt-1 font-mono text-lg font-medium tabular-nums ${tone || 'text-paper-900'}`}>{value}</p>
+      {hint && <p className="mt-0.5 text-xs text-paper-500">{hint}</p>}
     </div>
   );
 }
@@ -251,22 +251,22 @@ function AttentionSummary({ issuesSummary, lines }) {
   const critical = attentionLines.length > 0 || topIssues.some((g) => g.severity === 'critical');
 
   return (
-    <div className={`border-l-2 px-4 py-3 ${critical ? 'border-red-500 bg-red-50/50' : 'border-amber-500 bg-amber-50/50'}`}>
-      <p className={`text-xs font-semibold tracking-widest uppercase ${critical ? 'text-red-800' : 'text-amber-900'}`}>
+    <div className={`border-l-2 px-4 py-3 ${critical ? 'border-critical-600 bg-critical-50' : 'border-warning-600 bg-warning-50'}`}>
+      <p className={`text-xs font-semibold tracking-widest uppercase ${critical ? 'text-critical-800' : 'text-warning-900'}`}>
         Attention required
       </p>
-      <ul className="mt-2 space-y-1 text-sm text-slate-700">
+      <ul className="mt-2 space-y-1 text-sm text-paper-700">
         {attentionLines.map((l) => (
           <li key={`line-${l.line}`}>
-            <span className="font-medium text-slate-900">Line {l.line}</span> — {formatInt(l.remainingParts)} parts
+            <span className="font-medium text-paper-900">Line {l.line}</span> — {formatInt(l.remainingParts)} parts
             unmet
           </li>
         ))}
         {topIssues.map((g) => (
           <li key={g.code}>
-            <span className="font-medium text-slate-900">{g.title}</span>
+            <span className="font-medium text-paper-900">{g.title}</span>
             {g.affectedWeeks?.length > 0 && (
-              <span className="text-slate-500"> · weeks {g.affectedWeeks.join(', ')}</span>
+              <span className="text-paper-500"> · weeks {g.affectedWeeks.join(', ')}</span>
             )}
           </li>
         ))}
@@ -274,7 +274,7 @@ function AttentionSummary({ issuesSummary, lines }) {
       <a
         href="#schedule-health"
         className={`mt-2 inline-block text-sm font-medium underline underline-offset-2 hover:no-underline ${FOCUS_RING} ${
-          critical ? 'text-red-800' : 'text-amber-900'
+          critical ? 'text-critical-800' : 'text-warning-900'
         }`}
       >
         View issues →
@@ -301,13 +301,13 @@ function WeekTile({ week, issueGroups, onOpen }) {
       as="button"
       type="button"
       onClick={onOpen}
-      className={`w-full p-4 text-left transition-colors hover:border-slate-400 ${FOCUS_RING}`}
+      className={`w-full p-4 text-left transition-colors hover:border-paper-400 ${FOCUS_RING}`}
       aria-label={`Open week ${week.weekColumn}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <Label>Week</Label>
-          <p className="font-mono text-lg font-semibold text-slate-900">{week.weekColumn}</p>
+          <p className="font-mono text-lg font-semibold text-paper-900">{week.weekColumn}</p>
         </div>
         <StatusBadge status={status} />
       </div>
@@ -325,34 +325,34 @@ function WeekTile({ week, issueGroups, onOpen }) {
           <dt>
             <Label>Demand</Label>
           </dt>
-          <dd className="font-mono tabular-nums text-slate-900">{formatInt(week.SUM)}</dd>
+          <dd className="font-mono tabular-nums text-paper-900">{formatInt(week.SUM)}</dd>
         </div>
         <div>
           <dt>
             <Label>Allocated</Label>
           </dt>
-          <dd className="font-mono tabular-nums text-slate-900">{formatInt(allocated)}</dd>
+          <dd className="font-mono tabular-nums text-paper-900">{formatInt(allocated)}</dd>
         </div>
         <div>
           <dt>
             <Label>Remaining</Label>
           </dt>
-          <dd className={`font-mono tabular-nums ${remaining > 0 ? 'text-red-700' : 'text-slate-400'}`}>
+          <dd className={`font-mono tabular-nums ${remaining > 0 ? 'text-critical-700' : 'text-paper-400'}`}>
             {formatInt(remaining)}
           </dd>
         </div>
       </dl>
 
-      <div className="mt-3 border-t border-slate-100 pt-3">
+      <div className="mt-3 border-t border-paper-200 pt-3">
         <CapacityRail usedMinutes={weekMinutes.used} capacityMinutes={weekMinutes.capacity} />
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-3 flex items-center justify-between text-xs text-paper-500">
         <span>
-          Working days <span className="font-mono text-slate-700">{formatInt(week.actualWorkingDays)}</span>
+          Working days <span className="font-mono text-paper-700">{formatInt(week.actualWorkingDays)}</span>
         </span>
         <span>
-          Parts <span className="font-mono text-slate-700">{formatInt(week.CountOfParts)}</span>
+          Parts <span className="font-mono text-paper-700">{formatInt(week.CountOfParts)}</span>
         </span>
       </div>
     </Card>

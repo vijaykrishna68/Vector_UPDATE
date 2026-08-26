@@ -25,48 +25,48 @@ export const STATUS = {
     // Status is never conveyed by colour alone: every badge renders this symbol
     // and a text label alongside the colour.
     symbol: '●',
-    badge: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-    dot: 'bg-emerald-600',
-    bar: 'bg-emerald-600',
+    badge: 'bg-positive-50 text-positive-800 ring-positive-200',
+    dot: 'bg-positive-600',
+    bar: 'bg-positive-600',
     // Bare-text colour (headlines, dot-only indicators) — same hue as `badge`,
     // exposed separately so callers never need to know the badge's shade.
-    text: 'text-emerald-700'
+    text: 'text-positive-700'
   },
   warning: {
     key: 'warning',
     label: 'Warning',
     symbol: '▲',
-    badge: 'bg-amber-50 text-amber-900 ring-amber-200',
-    dot: 'bg-amber-500',
-    bar: 'bg-amber-500',
-    text: 'text-amber-700'
+    badge: 'bg-warning-50 text-warning-900 ring-warning-200',
+    dot: 'bg-warning-600',
+    bar: 'bg-warning-600',
+    text: 'text-warning-700'
   },
   critical: {
     key: 'critical',
     label: 'Critical',
     symbol: '■',
-    badge: 'bg-red-50 text-red-800 ring-red-200',
-    dot: 'bg-red-600',
-    bar: 'bg-red-600',
-    text: 'text-red-700'
+    badge: 'bg-critical-50 text-critical-800 ring-critical-200',
+    dot: 'bg-critical-600',
+    bar: 'bg-critical-600',
+    text: 'text-critical-700'
   },
   nodata: {
     key: 'nodata',
     label: 'No data',
     symbol: '○',
-    badge: 'bg-slate-100 text-slate-600 ring-slate-200',
-    dot: 'bg-slate-400',
-    bar: 'bg-slate-300',
-    text: 'text-slate-500'
+    badge: 'bg-paper-150 text-paper-600 ring-paper-300',
+    dot: 'bg-paper-400',
+    bar: 'bg-paper-300',
+    text: 'text-paper-500'
   },
   info: {
     key: 'info',
     label: 'Information',
     symbol: '□',
-    badge: 'bg-sky-50 text-sky-800 ring-sky-200',
-    dot: 'bg-sky-500',
-    bar: 'bg-sky-500',
-    text: 'text-sky-700'
+    badge: 'bg-paper-150 text-paper-700 ring-paper-300',
+    dot: 'bg-paper-500',
+    bar: 'bg-paper-500',
+    text: 'text-paper-600'
   }
 };
 

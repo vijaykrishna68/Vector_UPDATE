@@ -5,26 +5,27 @@ import { formatInt, formatPercent } from '../lib/format';
  * The shared visual language. Every component composes these instead of styling
  * itself, so spacing, borders, typography and status treatment stay consistent.
  *
- * Design intent: industrial and restrained. Thin borders over shadows, flat
- * surfaces, tabular numerals for every figure, tight vertical rhythm, no
- * gradients or decorative motion. Focus rings are always visible for keyboard use.
+ * Design intent: a premium industrial planning document — warm paper neutrals,
+ * thin borders over shadows, flat surfaces, tabular numerals in IBM Plex Mono
+ * for every figure, tight vertical rhythm, no gradients or decorative motion.
+ * Focus rings are always visible for keyboard use.
  */
 
 export const FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 focus-visible:ring-offset-2';
 
 /* ------------------------------------------------------------------ surfaces */
 
 /**
- * `selected` applies the brand-colored selected treatment centrally, so any
+ * `selected` applies the accent-colored selected treatment centrally, so any
  * consumer that needs a "this one is chosen" card state (e.g. a week or run
  * picker) gets the same border/ring instead of styling it ad hoc.
  */
 export function Card({ children, className = '', as: Tag = 'div', selected = false, ...rest }) {
   return (
     <Tag
-      className={`border bg-white ${
-        selected ? 'border-brand-700 ring-1 ring-brand-700' : 'border-slate-200'
+      className={`rounded-[3px] border bg-paper-50 ${
+        selected ? 'border-accent-600 ring-1 ring-accent-600' : 'border-paper-300'
       } ${className}`}
       {...rest}
     >
@@ -38,8 +39,8 @@ export function SectionHeader({ title, description, actions, level = 2 }) {
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
       <div>
-        <Heading className="text-sm font-semibold tracking-wide text-slate-900 uppercase">{title}</Heading>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        <Heading className="text-sm font-semibold tracking-wide text-paper-900 uppercase">{title}</Heading>
+        {description && <p className="mt-1 text-sm text-paper-500">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>
@@ -49,7 +50,7 @@ export function SectionHeader({ title, description, actions, level = 2 }) {
 /** Small uppercase label used above figures and in definition lists. */
 export function Label({ children, className = '' }) {
   return (
-    <span className={`text-[11px] font-medium tracking-wider text-slate-500 uppercase ${className}`}>
+    <span className={`text-[11px] font-medium tracking-wider text-paper-500 uppercase ${className}`}>
       {children}
     </span>
   );
@@ -74,16 +75,16 @@ export function Stat({ label, value, unit, hint, emphasis = false, size }) {
     <div className="min-w-0">
       <Label>{label}</Label>
       <div className="mt-1 flex items-baseline gap-1.5">
-        <span className={`font-mono tabular-nums tracking-tight text-slate-900 ${valueSize}`}>{value}</span>
-        {unit && <span className="text-xs text-slate-500">{unit}</span>}
+        <span className={`font-mono tabular-nums tracking-tight text-paper-900 ${valueSize}`}>{value}</span>
+        {unit && <span className="text-xs text-paper-500">{unit}</span>}
       </div>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-paper-500">{hint}</p>}
     </div>
   );
 }
 
 /** Horizontal meter. `tone` is a bg-* class from STATUS, never colour alone. */
-export function Meter({ value, tone = 'bg-slate-400', label }) {
+export function Meter({ value, tone = 'bg-paper-400', label }) {
   const pct = Math.max(0, Math.min(100, Number(value) || 0));
   return (
     <div
@@ -92,7 +93,7 @@ export function Meter({ value, tone = 'bg-slate-400', label }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label}
-      className="h-1.5 w-full overflow-hidden bg-slate-100"
+      className="h-1.5 w-full overflow-hidden bg-paper-200"
     >
       <div className={`h-full transition-[width] duration-500 ease-out ${tone}`} style={{ width: `${pct}%` }} />
     </div>
@@ -108,7 +109,7 @@ export function Meter({ value, tone = 'bg-slate-400', label }) {
  * `size="lg"` is for the single dashboard hero rail; every other usage should
  * stay at the default size.
  */
-export function CapacityRail({ usedMinutes = 0, capacityMinutes = 0, label, size = 'md', tone = 'bg-brand-600' }) {
+export function CapacityRail({ usedMinutes = 0, capacityMinutes = 0, label, size = 'md', tone = 'bg-accent-600' }) {
   const used = Number(usedMinutes) || 0;
   const capacity = Number(capacityMinutes) || 0;
   const pct = capacity > 0 ? (used / capacity) * 100 : null;
@@ -119,7 +120,7 @@ export function CapacityRail({ usedMinutes = 0, capacityMinutes = 0, label, size
       <div className="flex items-baseline justify-between gap-2">
         {label ? <Label>{label}</Label> : <span />}
         <span
-          className={`font-mono tabular-nums text-slate-900 ${
+          className={`font-mono tabular-nums text-paper-900 ${
             size === 'lg' ? 'text-2xl font-semibold' : 'text-sm font-semibold'
           }`}
         >
@@ -127,14 +128,14 @@ export function CapacityRail({ usedMinutes = 0, capacityMinutes = 0, label, size
         </span>
       </div>
       <div className={size === 'lg' ? 'mt-2' : 'mt-1.5'}>
-        <Meter value={pct ?? 0} tone={pct === null ? 'bg-slate-300' : tone} label={label || 'Capacity utilisation'} />
+        <Meter value={pct ?? 0} tone={pct === null ? 'bg-paper-300' : tone} label={label || 'Capacity utilisation'} />
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-1.5 flex items-center justify-between text-xs text-paper-500">
         <span>
-          <span className="font-mono tabular-nums text-slate-700">{formatInt(used)}</span> min used
+          <span className="font-mono tabular-nums text-paper-700">{formatInt(used)}</span> min used
         </span>
         <span>
-          <span className="font-mono tabular-nums text-slate-700">{formatInt(available)}</span> min available
+          <span className="font-mono tabular-nums text-paper-700">{formatInt(available)}</span> min available
         </span>
       </div>
     </div>
@@ -163,7 +164,7 @@ export function StatusBadge({ status, children, className = '' }) {
 export function Badge({ children, className = '' }) {
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-200 ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 text-xs font-medium text-paper-700 ring-1 ring-inset ring-paper-300 ${className}`}
     >
       {children}
     </span>
@@ -173,17 +174,17 @@ export function Badge({ children, className = '' }) {
 /* -------------------------------------------------------------------- buttons */
 
 const BUTTON_VARIANTS = {
-  primary: 'bg-brand-700 text-white hover:bg-brand-800 disabled:bg-slate-300',
+  primary: 'bg-accent-600 text-white hover:bg-accent-700 disabled:bg-paper-300',
   secondary:
-    'bg-white text-slate-800 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
-  ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:text-slate-300'
+    'bg-paper-50 text-paper-800 ring-1 ring-inset ring-paper-300 hover:bg-paper-150 disabled:text-paper-400',
+  ghost: 'text-paper-600 hover:bg-paper-150 hover:text-paper-900 disabled:text-paper-400'
 };
 
 export function Button({ children, variant = 'secondary', className = '', icon: Icon, ...rest }) {
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${BUTTON_VARIANTS[variant]} ${FOCUS_RING} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-[3px] px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${BUTTON_VARIANTS[variant]} ${FOCUS_RING} ${className}`}
       {...rest}
     >
       {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
@@ -197,13 +198,13 @@ export function Button({ children, variant = 'secondary', className = '', icon: 
 export function LoadingState({ label = 'Loading…', rows = 3 }) {
   return (
     <div className="p-6" role="status" aria-live="polite">
-      <div className="flex items-center gap-2 text-sm text-slate-600">
+      <div className="flex items-center gap-2 text-sm text-paper-600">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         {label}
       </div>
       <div className="mt-4 space-y-2" aria-hidden="true">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-3 bg-slate-100" style={{ width: `${88 - i * 14}%` }} />
+          <div key={i} className="h-3 bg-paper-150" style={{ width: `${88 - i * 14}%` }} />
         ))}
       </div>
     </div>
@@ -217,12 +218,12 @@ export function ErrorState({ title = 'Something went wrong', error, onRetry, act
   return (
     <div className="p-6" role="alert">
       <div className="flex items-start gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-critical-600" aria-hidden="true" />
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-          <p className="mt-1 text-sm text-slate-600">{detail}</p>
+          <h3 className="text-sm font-semibold text-paper-900">{title}</h3>
+          <p className="mt-1 text-sm text-paper-600">{detail}</p>
           {(error?.code || error?.requestId) && (
-            <p className="mt-2 font-mono text-xs text-slate-400">
+            <p className="mt-2 font-mono text-xs text-paper-400">
               {error.code}
               {error.requestId ? ` · request ${error.requestId}` : ''}
             </p>
@@ -244,9 +245,9 @@ export function ErrorState({ title = 'Something went wrong', error, onRetry, act
 export function EmptyState({ title, description, action, icon: Icon = Inbox }) {
   return (
     <div className="px-6 py-12 text-center">
-      <Icon className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
-      <h3 className="mt-3 text-sm font-semibold text-slate-900">{title}</h3>
-      {description && <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{description}</p>}
+      <Icon className="mx-auto h-8 w-8 text-paper-300" aria-hidden="true" />
+      <h3 className="mt-3 text-sm font-semibold text-paper-900">{title}</h3>
+      {description && <p className="mx-auto mt-1 max-w-md text-sm text-paper-500">{description}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );
@@ -272,8 +273,8 @@ export function Th({ children, align = 'left', sticky = false, className = '', s
   return (
     <th
       scope={scope}
-      className={`border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold tracking-wider text-slate-600 uppercase ${alignment} ${
-        sticky ? 'sticky left-0 z-20 bg-slate-50' : ''
+      className={`border-b border-paper-300 bg-paper-150 px-3 py-2 text-[11px] font-semibold tracking-wider text-paper-600 uppercase ${alignment} ${
+        sticky ? 'sticky left-0 z-20 bg-paper-150' : ''
       } ${className}`}
       {...rest}
     >
@@ -286,9 +287,9 @@ export function Td({ children, align = 'left', numeric = false, sticky = false, 
   const alignment = align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left';
   return (
     <td
-      className={`border-b border-slate-100 px-3 py-1.5 text-slate-800 ${alignment} ${
+      className={`border-b border-paper-200 px-3 py-1.5 text-paper-800 ${alignment} ${
         numeric ? 'font-mono tabular-nums' : ''
-      } ${sticky ? 'sticky left-0 z-10 bg-white' : ''} ${className}`}
+      } ${sticky ? 'sticky left-0 z-10 bg-paper-50' : ''} ${className}`}
       {...rest}
     >
       {children}

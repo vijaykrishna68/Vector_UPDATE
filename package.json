@@ -1,0 +1,13 @@
+{
+  "name": "vector-scheduler",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "cd client/scheduler-fe && npm install && npm run build",
+    "postinstall": "npm run build && cd server && npm install",
+    "start": "cd server && npm start"
+  }
+}
